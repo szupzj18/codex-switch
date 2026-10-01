@@ -1,12 +1,12 @@
-# codex-cx — parallel multi-account manager for the OpenAI Codex CLI (zsh)
-# https://github.com/szupzj18/codex-cx
+# CodeX Switch — parallel multi-account manager for the OpenAI Codex CLI (zsh)
+# https://github.com/szupzj18/codex-switch
 #
 # Each account gets its own CODEX_HOME (auth.json, sessions, config, quotas).
 # Accounts stay usable in parallel: one shell per account, no restart, no
 # global "active account". Project bindings auto-switch on cd.
 
 typeset -g CX_VERSION="0.1.0"
-typeset -g CX_CONFIG_DIR="${CX_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/codex-cx}"
+typeset -g CX_CONFIG_DIR="${CX_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/codex-switch}"
 typeset -g CX_ACCOUNT_FILE="$CX_CONFIG_DIR/accounts.tsv"
 typeset -g CX_BINDING_FILE="$CX_CONFIG_DIR/bindings.tsv"
 typeset -gA CX_ACCOUNT_HOMES
@@ -319,7 +319,7 @@ cx() {
       ;;
 
     version|-v|--version)
-      print "codex-cx $CX_VERSION"
+      print "CodeX Switch $CX_VERSION"
       ;;
 
     off|reset|unset)
@@ -329,7 +329,7 @@ cx() {
       ;;
 
     help|-h|--help)
-      print -P -- "%Bcx%b — parallel multi-account manager for Codex CLI"
+      print -P -- "%Bcx%b — CodeX Switch: parallel multi-account manager for Codex CLI"
       cat <<EOF
   cx                         list accounts and signed-in emails
   cx use <name>              switch this shell to <name> (RPROMPT marker)
@@ -343,7 +343,7 @@ cx() {
   cx bind [name]             bind current directory (default: current account)
   cx unbind [dir]            remove a directory binding (default: current dir)
   cx binds                   list project bindings
-  cx version                 print codex-cx version
+  cx version                 print CodeX Switch version
 
   accounts: $CX_ACCOUNT_NAMES
   files:    $CX_ACCOUNT_FILE

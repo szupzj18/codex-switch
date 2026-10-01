@@ -1,4 +1,4 @@
-# codex-cx
+# CodeX Switch
 
 **Parallel multi-account manager for the OpenAI Codex CLI, in zsh.**
 
@@ -29,7 +29,7 @@ Two design styles exist in the wild:
 | Global switch (swap `auth.json`) | One active account machine-wide; restart clients after switching | No — every window flips |
 | **`CODEX_HOME` isolation (this tool)** | One home directory per account; shell selects one | **Yes — different accounts per terminal** |
 
-codex-cx is a single dependency-free zsh script: no wrapper around the
+CodeX Switch is a single dependency-free zsh script: no wrapper around the
 `codex` binary, no daemon, no proxy.
 
 ## Requirements
@@ -41,20 +41,20 @@ codex-cx is a single dependency-free zsh script: no wrapper around the
 ## Install
 
 ```shell
-curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-cx/main/install.sh | zsh
+curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | zsh
 ```
 
 Or clone and install locally:
 
 ```shell
-git clone https://github.com/szupzj18/codex-cx.git
-cd codex-cx && zsh install.sh
+git clone https://github.com/szupzj18/codex-switch.git
+cd codex-switch && zsh install.sh
 ```
 
 Open a new terminal and run `cx help`.
 
 The installer adds one `source` block to `~/.zshrc` and copies the script to
-`~/.codex-cx`. Uninstall with `zsh uninstall.sh` (account data is never
+`~/.codex-switch`. Uninstall with `zsh uninstall.sh` (account data is never
 deleted).
 
 ## Quick start
@@ -134,10 +134,10 @@ A 2x2 grid with four accounts signed in at once works naturally.
 ## Files
 
 ```text
-~/.config/codex-cx/accounts.tsv    registered accounts   <name>\t<codex home>
-~/.config/codex-cx/bindings.tsv    project bindings      <name>\t<project path>
-~/.codex-cx/codex-cx.zsh           the installed script
-~/.codex/  ~/.codex-<name>/        per-account Codex homes (untouched by codex-cx)
+~/.config/codex-switch/accounts.tsv    registered accounts   <name>\t<codex home>
+~/.config/codex-switch/bindings.tsv    project bindings      <name>\t<project path>
+~/.codex-switch/codex-switch.zsh           the installed script
+~/.codex/  ~/.codex-<name>/        per-account Codex homes (untouched by CodeX Switch)
 ```
 
 Override the registry location with `CX_CONFIG_DIR`.
@@ -152,16 +152,16 @@ On first run, `default` (`~/.codex`) is seeded automatically and existing
 - This tool never modifies anything inside the account homes — it only sets
   `CODEX_HOME` for the shell and tracks two small TSV files.
 - VS Code extension and the Codex desktop app do not read `CODEX_HOME`;
-  codex-cx manages the CLI only.
+  CodeX Switch manages the CLI only.
 
 ## Uninstall
 
 ```shell
 zsh uninstall.sh          # remove the zshrc source block
-zsh uninstall.sh --purge  # also remove ~/.codex-cx
+zsh uninstall.sh --purge  # also remove ~/.codex-switch
 ```
 
-Account homes and `~/.config/codex-cx` are kept; delete them yourself if
+Account homes and `~/.config/codex-switch` are kept; delete them yourself if
 desired.
 
 ## License

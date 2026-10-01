@@ -1,22 +1,22 @@
 #!/bin/zsh
-# codex-cx uninstaller
+# CodeX Switch uninstaller
 #
 #   zsh uninstall.sh           remove the zshrc source block (data kept)
 #   zsh uninstall.sh --purge   also delete the installed script
 #
-# Account data (~/.codex, ~/.codex-*) and the codex-cx registry
-# (~/.config/codex-cx) are never deleted.
+# Account data (~/.codex, ~/.codex-*) and the CodeX Switch registry
+# (~/.config/codex-switch) are never deleted.
 
 emulate -L zsh
 
-INSTALL_DIR="${CX_HOME:-$HOME/.codex-cx}"
-DEST="$INSTALL_DIR/codex-cx.zsh"
+INSTALL_DIR="${CX_HOME:-$HOME/.codex-switch}"
+DEST="$INSTALL_DIR/codex-switch.zsh"
 ZSHRC="${ZDOTDIR:-$HOME}/.zshrc"
-MARK_BEGIN="# >>> codex-cx >>>"
-MARK_END="# <<< codex-cx <<<"
+MARK_BEGIN="# >>> codex-switch >>>"
+MARK_END="# <<< codex-switch <<<"
 
 if [[ -f $ZSHRC ]] && grep -qF "$MARK_BEGIN" "$ZSHRC"; then
-  tmp="${ZSHRC}.codex-cx.tmp"
+  tmp="${ZSHRC}.codex-switch.tmp"
   awk -v b="$MARK_BEGIN" -v e="$MARK_END" '
     $0 == b { skip=1; next }
     $0 == e { skip=0; next }
@@ -32,4 +32,4 @@ if [[ $1 == --purge && -d $INSTALL_DIR ]]; then
   print "deleted $INSTALL_DIR"
 fi
 
-print "account data and bindings left untouched under ~/.codex* and ~/.config/codex-cx"
+print "account data and bindings left untouched under ~/.codex* and ~/.config/codex-switch"
