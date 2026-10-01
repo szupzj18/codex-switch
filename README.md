@@ -154,6 +154,16 @@ On first run, `default` (`~/.codex`) is seeded automatically and existing
 - VS Code extension and the Codex desktop app do not read `CODEX_HOME`;
   CodeX Switch manages the CLI only.
 
+## Development
+
+```shell
+zsh -n codex-switch.zsh   # syntax check
+zsh tests/smoke.zsh       # full smoke test (isolated temp HOME, no network)
+```
+
+CI (`.github/workflows/smoke.yml`) runs the smoke suite on zsh/Linux for
+every push and pull request.
+
 ## Uninstall
 
 ```shell

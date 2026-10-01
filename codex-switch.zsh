@@ -20,7 +20,7 @@ typeset -ga CX_ACCOUNT_NAMES
 # ~/.codex-* homes that already contain an auth.json. Discovery never moves
 # or copies data; it only registers existing directories.
 _cx_init() {
-  [[ -f $CX_ACCOUNT_FILE ]] && return
+  [[ -f $CX_ACCOUNT_FILE ]] && return 0
   mkdir -p "$CX_CONFIG_DIR"
   {
     print -r -- "default	$HOME/.codex"
@@ -37,7 +37,7 @@ _cx_init() {
 _cx_load_registry() {
   CX_ACCOUNT_HOMES=()
   CX_ACCOUNT_NAMES=()
-  [[ -f $CX_ACCOUNT_FILE ]] || return
+  [[ -f $CX_ACCOUNT_FILE ]] || return 0
   local name home
   while IFS=$'\t' read -r name home; do
     [[ -z $name || $name == \#* ]] && continue
@@ -102,7 +102,7 @@ _cx_current_account() {
 
 _cx_binding_for() {
   local dir="$1" name path best_path="" best_name=""
-  [[ -f $CX_BINDING_FILE ]] || return
+  [[ -f $CX_BINDING_FILE ]] || return 0
   while IFS=$'\t' read -r name path; do
     [[ -z $name || $name == \#* ]] && continue
     if [[ $dir == $path || $dir == $path/* ]]; then
@@ -112,6 +112,7 @@ _cx_binding_for() {
     fi
   done < "$CX_BINDING_FILE"
   [[ -n $best_name ]] && print -r -- "$best_name"
+  return 0
 }
 
 _cx_apply_binding() {
@@ -119,7 +120,7 @@ _cx_apply_binding() {
   bound=$(_cx_binding_for "$PWD")
   if [[ -n $bound ]]; then
     target=$CX_ACCOUNT_HOMES[$bound]
-    [[ -z $target ]] && return
+    [[ -z $target ]] && return 0
     if [[ $CX_AUTO_ACTIVE != $bound ]]; then
       [[ -z $CX_AUTO_ACTIVE ]] && _CX_PRE_AUTO_HOME=${CODEX_HOME:-}
       export CODEX_HOME=$target
@@ -381,8 +382,12 @@ _cx_rprompt() {
 
 typeset -g CX_AUTO_ACTIVE="" _CX_PRE_AUTO_HOME=""
 if [[ -o interactive ]]; then
-  [[ -z ${precmd_functions[(r)_cx_rprompt]} ]] && precmd_functions+=(_cx_rprompt)
-  [[ -z ${chpwd_functions[(r)_cx_apply_binding]} ]] && chpwd_functions=(_cx_apply_binding $chpwd_functions)
+  if [[ -z ${precmd_functions[(r)_cx_rprompt]} ]]; then
+    precmd_functions+=(_cx_rprompt)
+  fi
+  if [[ -z ${chpwd_functions[(r)_cx_apply_binding]} ]]; then
+    chpwd_functions=(_cx_apply_binding $chpwd_functions)
+  fi
   _cx_apply_binding
 fi
 
@@ -398,4 +403,5 @@ _cx() {
     esac
   fi
 }
-compdef _cx cx 2>/dev/null
+(( $+functions[compdef] )) && compdef _cx cx
+return 0
