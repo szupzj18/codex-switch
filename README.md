@@ -157,12 +157,25 @@ On first run, `default` (`~/.codex`) is seeded automatically and existing
 ## Development
 
 ```shell
-zsh -n codex-switch.zsh   # syntax check
-zsh tests/smoke.zsh       # full smoke test (isolated temp HOME, no network)
+zsh -n codex-switch.zsh         # syntax check
+zsh tests/smoke.zsh             # unit-style checks (isolated temp HOME, no network)
+zsh tests/install-e2e.zsh       # full install journey (must run as root in a bare container)
 ```
 
-CI (`.github/workflows/smoke.yml`) runs the smoke suite on zsh/Linux for
-every push and pull request.
+Run the install E2E locally in a throwaway container:
+
+```shell
+docker run --rm -v "$PWD":/src:ro -w /src ubuntu:24.04 bash -c \
+  "apt-get update -qq && apt-get install -y -qq zsh python3 && zsh tests/install-e2e.zsh"
+```
+
+It creates a fresh unprivileged user, runs `install.sh`, exercises every
+command in a real interactive zsh (with a fake `codex` on `PATH`), checks the
+no-python3 fallback, and verifies `uninstall.sh` leaves account data intact.
+
+CI (`.github/workflows/smoke.yml`) runs both suites on Linux/zsh for every
+push and pull request; the install E2E runs inside an `ubuntu:24.04`
+container.
 
 ## Uninstall
 

@@ -1,4 +1,4 @@
-name: smoke
+name: CI
 
 on:
   push:
@@ -28,3 +28,21 @@ jobs:
 
       - name: Smoke tests
         run: zsh tests/smoke.zsh
+
+  install-e2e:
+    name: install E2E (fresh user, ubuntu:24.04)
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zsh and python3
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends zsh python3
+
+      - name: Install-time end-to-end test
+        run: zsh tests/install-e2e.zsh
+        env:
+          CX_E2E_SRC: ${{ github.workspace }}
