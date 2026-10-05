@@ -61,6 +61,7 @@ deleted).
 
 ```shell
 # Register an existing ~/.codex-* home (or create a fresh one and sign in)
+cx setup                          # interactive first-run wizard
 cx add work                       # creates ~/.codex-work, runs codex login
 cx add side --device-auth         # headless sign-in flow
 cx add client-acme --home ~/codex-homes/acme --no-login
@@ -102,6 +103,7 @@ from their parent.
 |---|---|
 | `cx` / `cx ls` | List accounts, home directories, signed-in emails, plan and subscription expiry |
 | `cx usage` | Same, plus live limits per account (queries chatgpt.com with each account's own token) |
+| `cx setup` | Interactive first-run wizard: adopt existing `~/.codex-*` homes, sign in, add accounts, bind this directory |
 | `cx use <name>` / `cx use -` | Switch this shell to an account / back to default |
 | `cx <name> [codex args...]` | One-shot invocation under that account |
 | `cx login <name>` | (Re)run `codex login` for one account |

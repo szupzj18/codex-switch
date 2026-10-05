@@ -164,6 +164,17 @@ print -rn -- "$out" | grep -qx "FAKE_CODEX_HOME=$HOME/.codex-work" \
 $out"
 ok "one-shot cx <account> invokes codex with correct CODEX_HOME and args"
 
+# ---- 10. setup wizard (scripted answers) --------------------------------------
+
+mkdir -p "$HOME/.codex-adopt"
+print -r -- '{"tokens":{"id_token":"x.eyJlbWFpbCI6ImFkb3B0QGV4YW1wbGUuY29tIn0.s"}}' > "$HOME/.codex-adopt/auth.json"
+# answers: register adopt=y, sign in default=n, add another=n, show usage=n
+out=$(printf 'y\nn\nn\nn\n' | cx setup 2>&1)
+contains "$out" "CodeX Switch setup" "setup banner"
+contains "$(<"$CX_ACCOUNT_FILE")" "adopt	$HOME/.codex-adopt" "setup registers discovered home"
+out=$(cx setup </dev/null 2>&1) || die "setup must not fail on EOF"
+ok "cx setup adopts existing homes and survives EOF"
+
 # ---- 9. version --------------------------------------------------------------
 
 out=$(cx version)
