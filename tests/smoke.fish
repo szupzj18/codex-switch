@@ -82,7 +82,7 @@ ok "rm / --purge"
 mkdir $tmp/bin
 printf '#!/bin/sh\necho "FAKE_HOME=$CODEX_HOME"\necho "ARGS=$*"\n' > $tmp/bin/codex
 chmod +x $tmp/bin/codex
-set -l one (env PATH=$tmp/bin:$PATH fish -c "source $root/codex-switch.fish; cx work hello-world" | string collect)
+set -l one (begin; set -lx PATH $tmp/bin $PATH; fish -c "source $root/codex-switch.fish; cx work hello-world"; end | string collect)
 contains_str $one "FAKE_HOME=$HOME/.codex-work" "one-shot home"
 contains_str $one "ARGS=hello-world" "one-shot args"
 ok one-shot
