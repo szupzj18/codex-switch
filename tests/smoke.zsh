@@ -178,7 +178,7 @@ print -r -- '{"tokens":{"id_token":"x.eyJlbWFpbCI6ImFkb3B0QGV4YW1wbGUuY29tIn0.s"
 # answers: register adopt=y, sign in default=n, add another=n, show usage=n
 out=$(printf 'y\nn\nn\nn\n' | cx setup 2>&1)
 contains "$out" "CodeX Switch setup" "setup banner"
-contains "$(<"$CX_ACCOUNT_FILE")" "adopt	$HOME/.codex-adopt" "setup registers discovered home"
+contains "$(<"$XDG_CONFIG_HOME/codex-switch/accounts.tsv")" "adopt	$HOME/.codex-adopt" "setup registers discovered home"
 out=$(cx setup </dev/null 2>&1) || die "setup must not fail on EOF"
 ok "cx setup adopts existing homes and survives EOF"
 

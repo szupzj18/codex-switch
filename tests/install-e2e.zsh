@@ -37,15 +37,22 @@ useradd -m -s "$ZSH_BIN" "$E2E_USER"
 UH=$(getent passwd "$E2E_USER" | cut -d: -f6)
 
 step "1. installer writes zshrc block as a non-root user"
-inst=$(su "$E2E_USER" -s "$ZSH_BIN" -c "zsh $SRC/install.sh")
+inst=$(su "$E2E_USER" -s "$ZSH_BIN" -c "sh $SRC/install.sh")
 print -r -- "$inst" | grep -q "added source block"
 [[ -f $UH/.zshrc ]] || die ".zshrc not created"
 grep -q '# >>> codex-switch >>>' "$UH/.zshrc" || die "marker begin missing"
 grep -q '# <<< codex-switch <<<' "$UH/.zshrc" || die "marker end missing"
-ok "install.sh worked for $E2E_USER"
+for f in cx_core.py codex-switch.zsh codex-switch.bash codex-switch.fish; do
+  [[ -f $UH/.codex-switch/$f ]] || die "$f not installed"
+done
+grep -q '# >>> codex-switch >>>' "$UH/.bashrc" || die "bashrc block missing"
+if (( $+commands[fish] )); then
+  grep -q 'codex-switch.fish' "$UH/.config/fish/conf.d/codex-switch.fish" || die "fish conf.d missing"
+fi
+ok "install.sh (plain sh) worked for $E2E_USER: core + zsh/bash/fish wired"
 
 step "2. installer is idempotent"
-inst=$(su "$E2E_USER" -s "$ZSH_BIN" -c "zsh $SRC/install.sh")
+inst=$(su "$E2E_USER" -s "$ZSH_BIN" -c "sh $SRC/install.sh")
 print -r -- "$inst" | grep -q "already present"
 (( $(grep -c 'codex-switch >>>' $UH/.zshrc) == 1 )) || die "marker block duplicated"
 ok "second install does not duplicate the block"
@@ -113,33 +120,86 @@ scenario_out=$(su "$E2E_USER" -s "$ZSH_BIN" -c "$ZSH_BIN -i \$HOME/scenario.zsh"
 print "$scenario_out" | grep -q E2E_SCENARIO_OK || die "scenario did not report success"
 ok "all interactive commands work in a fresh user shell"
 
-step "4. cx ls without python3 degrades gracefully"
-mkdir -p "$UH/.codex-demo" "$UH/.config/codex-switch"
-printf 'garbage-non-json\n' > "$UH/.codex-demo/auth.json"
-printf 'default\t%s\ndemo\t%s\n' "$UH/.codex" "$UH/.codex-demo" > "$UH/.config/codex-switch/accounts.tsv"
-chown -R "$E2E_USER" "$UH/.config" "$UH/.codex-demo"
+step "3b. bash and fish wrappers work in a fresh interactive shell"
+cat > "$UH/scenario.bash" <<'EOF'
+set -e
+export PATH="$HOME/bin:$PATH"
+cx version | grep -q "CodeX Switch"
+cx add demo2 --no-login >/dev/null
+cx use demo2 >/dev/null
+[ "$CODEX_HOME" = "$HOME/.codex-demo2" ]
+[ "$CX_PROMPT_TEXT" = "[codex:demo2]" ]
+cx use - >/dev/null
+[ -z "${CODEX_HOME:-}" ]
+mkdir -p "$HOME/bw"
+cd "$HOME/bw"
+cx bind demo2 >/dev/null
+cd "$HOME"; _cx_prompt_hook; cd "$HOME/bw"; _cx_prompt_hook
+[ "$CODEX_HOME" = "$HOME/.codex-demo2" ]
+cd "$HOME"; _cx_prompt_hook
+[ -z "${CODEX_HOME:-}" ]
+cx rm demo2 --purge >/dev/null
+echo E2E_BASH_OK
+EOF
+chown "$E2E_USER" "$UH/scenario.bash"
+out=$(su "$E2E_USER" -s /bin/bash -c "bash -i -c 'source \$HOME/.codex-switch/codex-switch.bash; source \$HOME/scenario.bash'" 2>&1) || { print "$out" >&2; die "bash scenario failed"; }
+print "$out" | grep -q E2E_BASH_OK || die "bash scenario did not report success
+$out"
+ok "bash wrapper: add/use/prompt/bind/hook/rm"
+if (( $+commands[fish] )); then
+  cat > "$UH/scenario.fish" <<'EOF'
+cx version | grep -q "CodeX Switch"; or exit 1
+cx add demo3 --no-login >/dev/null; or exit 1
+cx use demo3 >/dev/null
+test "$CODEX_HOME" = "$HOME/.codex-demo3"; or begin; echo BAD_USE; exit 1; end
+cx use - >/dev/null
+test -z "$CODEX_HOME"; or begin; echo BAD_CLEAR; exit 1; end
+mkdir -p $HOME/fw
+cd $HOME/fw
+cx bind demo3 >/dev/null
+cd $HOME
+cd $HOME/fw
+test "$CODEX_HOME" = "$HOME/.codex-demo3"; or begin; echo BAD_BIND; exit 1; end
+cd $HOME
+test -z "$CODEX_HOME"; or begin; echo BAD_LEAVE; exit 1; end
+cx rm demo3 --purge >/dev/null
+echo E2E_FISH_OK
+EOF
+  chown "$E2E_USER" "$UH/scenario.fish"
+  out=$(su "$E2E_USER" -s "$(whence -p fish)" -c "source \$HOME/.codex-switch/codex-switch.fish; source \$HOME/scenario.fish" 2>&1) || { print "$out" >&2; die "fish scenario failed"; }
+  print "$out" | grep -q E2E_FISH_OK || die "fish scenario did not report success
+$out"
+  ok "fish wrapper: add/use/bind/hook/rm"
+fi
+
+step "4. without python3 every wrapper explains what is missing"
 cat > "$UH/no-py.zsh" <<'EOF'
-export PATH=/nonexistent
 cx ls
 EOF
 chown "$E2E_USER" "$UH/no-py.zsh"
-out=$(su "$E2E_USER" -s "$ZSH_BIN" -c "$ZSH_BIN -i \$HOME/no-py.zsh" 2>&1)
-print "$out" | grep -q "signed in" || die "no-python fallback message missing
+out=$(su "$E2E_USER" -s "$ZSH_BIN" -c "PATH=/nonexistent $ZSH_BIN -i \$HOME/no-py.zsh" 2>&1) || true
+print "$out" | grep -q "python3 is required" || die "no-python message missing
 $out"
-if print -rn -- "$out" | grep -q "command not found"; then die "spurious error with no python3
-$out"; fi
-ok "email column falls back without python3"
+ok "clear message when python3 is missing"
 
 step "5. uninstaller removes the block but never account data"
-un=$(su "$E2E_USER" -s "$ZSH_BIN" -c "zsh $SRC/uninstall.sh")
+mkdir -p "$UH/.codex-demo"
+un=$(su "$E2E_USER" -s "$ZSH_BIN" -c "sh $SRC/uninstall.sh")
 print -r -- "$un" | grep -q "removed source block"
 ! grep -q codex-switch "$UH/.zshrc" || die "zshrc still references codex-switch"
+! grep -q codex-switch "$UH/.bashrc" || die "bashrc still references codex-switch"
+[[ ! -e $UH/.config/fish/conf.d/codex-switch.fish ]] || die "fish conf.d not removed"
 [[ -d $UH/.codex-demo && -f $UH/.config/codex-switch/accounts.tsv ]] || die "account data was deleted"
 ok "uninstall.sh clean, data intact"
 
-step "6. script syntax"
+step "6. syntax"
 zsh -n "$SRC/codex-switch.zsh"
-ok "codex-switch.zsh parses"
+bash -n "$SRC/codex-switch.bash"
+python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$SRC/cx_core.py"
+sh -n "$SRC/install.sh"
+sh -n "$SRC/uninstall.sh"
+if (( $+commands[fish] )); then fish -n "$SRC/codex-switch.fish"; fi
+ok "all scripts parse"
 
 print ""
 print -P -- "%F{green}All $n install E2E checks passed.%f"
