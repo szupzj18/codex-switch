@@ -3,108 +3,103 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CodeX Switch — parallel multi-account manager for Codex CLI</title>
-<meta name="description" content="A single dependency-free zsh script that gives every Codex CLI account its own CODEX_HOME. One account per terminal, project bindings that switch on cd, live plan limits.">
+<title>CodeX Switch — Codex CLI, many accounts</title>
+<meta name="description" content="Run different Codex CLI accounts in different terminals at the same time. One zsh script, no daemon.">
 <style>
-:root{--bg:#fafaf9;--fg:#1c1917;--muted:#6b645d;--card:#fff;--line:#e7e5e4;--accent:#0f766e;--code-bg:#1c1917;--code-fg:#e7e5e4;--dim:#a8a29e;--ok:#4ade80}
-@media (prefers-color-scheme:dark){:root{--bg:#0c0a09;--fg:#e7e5e4;--muted:#a8a29e;--card:#171412;--line:#292524;--accent:#2dd4bf;--code-bg:#000;--code-fg:#e7e5e4}}
+:root{--bg:#0b0d0c;--panel:#111514;--line:#1f2623;--fg:#d7dedb;--dim:#7b8884;--g:#5eead4;--y:#fbbf24;--p:#c4b5fd;--r:#fb7185}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-main{max-width:860px;margin:0 auto;padding:56px 16px 80px}
-h1{font-size:clamp(2rem,6vw,3rem);line-height:1.15;margin:0 0 12px;letter-spacing:-.02em}
-h2{font-size:1.4rem;margin:56px 0 12px;letter-spacing:-.01em}
-p{margin:0 0 14px}
-.lead{font-size:1.15rem;color:var(--muted);max-width:640px}
-a{color:var(--accent)}
-code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88rem}
-pre{background:var(--code-bg);color:var(--code-fg);padding:16px;border-radius:10px;overflow-x:auto;margin:0;line-height:1.55}
-.dim{color:var(--dim)}.ok{color:var(--ok)}
-.install{position:relative;margin:28px 0 8px}
-button{position:absolute;top:8px;right:8px;background:transparent;color:var(--dim);border:1px solid #44403c;border-radius:6px;padding:3px 10px;font:inherit;font-size:.78rem;cursor:pointer}
-button:hover{color:#fff}
-.links{display:flex;gap:16px;flex-wrap:wrap;font-size:.95rem}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
-.card h3{margin:0 0 6px;font-size:1rem}
-.card p{margin:0;color:var(--muted);font-size:.93rem}
-table{width:100%;border-collapse:collapse;font-size:.93rem}
-th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--muted);font-weight:600}
-td:first-child{white-space:nowrap}
-.tw{overflow-x:auto}
-footer{margin-top:64px;color:var(--muted);font-size:.88rem}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:980px;margin:0 auto;padding:48px 16px 80px}
+.tag{color:var(--g);font-size:.85rem}
+h1{font:700 clamp(1.9rem,6vw,3.2rem)/1.1 ui-monospace,Menlo,monospace;margin:8px 0 14px}
+h1 span{color:var(--g)}
+p{margin:0 0 14px;color:var(--dim)}
+a{color:var(--g)}
+.term{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.bar{display:flex;gap:6px;padding:9px 12px;border-bottom:1px solid var(--line);align-items:center;color:var(--dim);font-size:.78rem}
+.bar i{width:10px;height:10px;border-radius:50%;background:#2a3330;display:block}
+.bar b{margin-left:8px;font-weight:400}
+pre{margin:0;padding:14px 16px;overflow-x:auto;font:.86rem/1.6 ui-monospace,Menlo,monospace;color:var(--fg)}
+.d{color:var(--dim)}.g{color:var(--g)}.y{color:var(--y)}.p{color:var(--p)}.r{color:var(--r)}
+.panes{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin:28px 0}
+.cta{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--g);border-radius:8px;padding:12px 14px;margin:24px 0 8px;overflow-x:auto}
+.cta code{white-space:nowrap;color:var(--g)}
+.cta button{margin-left:auto;background:var(--g);color:#04110e;border:0;border-radius:5px;padding:4px 12px;font:inherit;font-size:.8rem;cursor:pointer;font-weight:700}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:28px 0 8px}
+@media(max-width:620px){.vs{grid-template-columns:1fr}}
+.vs .term.bad{border-color:#4c1d26}.vs .term.good{border-color:#134e44}
+.vs .bar b.r{color:var(--r)}.vs .bar b.g{color:var(--g)}
+.vs p{padding:0 16px 14px;margin:0;font-size:.84rem}
+h2{font-size:1.05rem;margin:48px 0 14px;color:var(--fg)}
+h2::before{content:"# ";color:var(--g)}
+ul{list-style:none;padding:0;margin:0;color:var(--dim)}
+li{padding:5px 0}li::before{content:"› ";color:var(--g)}
+li b{color:var(--fg);font-weight:600}
+footer{margin-top:56px;color:var(--dim);font-size:.82rem}
 </style>
 </head>
 <body>
 <main>
-  <h1>CodeX Switch</h1>
-  <p class="lead">Parallel multi-account manager for the OpenAI Codex CLI. Every account gets its own <code>CODEX_HOME</code>, so you can run different accounts in different terminals at the same time.</p>
+  <div class="tag">$ codex-switch --version 0.1.0</div>
+  <h1>Many Codex accounts.<br><span>One terminal each.</span></h1>
+  <p>A single zsh script. Every account gets its own <code>CODEX_HOME</code>, so four panes can run four sign-ins at once. No daemon, no proxy, nothing to restart.</p>
 
-  <div class="install">
-    <pre id="cmd">curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | zsh</pre>
-    <button id="copy" type="button">Copy</button>
-  </div>
-  <div class="links">
-    <a href="https://github.com/szupzj18/codex-switch">GitHub</a>
-    <a href="https://github.com/szupzj18/codex-switch#readme">Full README</a>
-  </div>
+  <div class="cta"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | zsh</code><button id="copy" type="button">copy</button></div>
+  <p><a href="https://github.com/szupzj18/codex-switch">github.com/szupzj18/codex-switch</a></p>
 
-  <h2>What it looks like</h2>
-<pre><span class="dim">$</span> cx usage
- codex accounts (* active in this shell, a auto-switch by directory)
- * default   ~/.codex        alice@gmail.com     pro until 2026-11-02
-              7d 6% (reset 4d9h) · credits 61822
-   work      ~/.codex-work   alice@company.com   promax until 2026-10-07
-              7d 0% (reset 7d0h) · credits 62500
-   side      ~/.codex-side   bob@gmail.com       team until 2026-10-17
-              5h 0% (reset 5h0m) · 7d 26% (reset 1d15h)</pre>
-
-  <h2>Why</h2>
-  <div class="grid">
-    <div class="card"><h3>Truly parallel</h3><p>One account per terminal or tmux pane. No global "active account" that flips every other window.</p></div>
-    <div class="card"><h3>Project bindings</h3><p><code>cx bind work</code> in a repo; entering the directory switches automatically, leaving restores your previous account.</p></div>
-    <div class="card"><h3>Plans and limits at a glance</h3><p><code>cx usage</code> shows each account's plan, expiry, 5h/7d windows and credits, fetched in parallel.</p></div>
-    <div class="card"><h3>Nothing in the way</h3><p>One dependency-free zsh script. No wrapper around <code>codex</code>, no daemon, no proxy.</p></div>
+  <h2>global switch vs. cx</h2>
+  <div class="vs">
+    <div class="term bad"><div class="bar"><i></i><i></i><i></i><b class="r">global switch (swap auth.json)</b></div>
+<pre>window 1  work  <span class="r">→ side</span>
+window 2  work  <span class="r">→ side</span>
+window 3  work  <span class="r">→ side</span></pre>
+<p>One active account machine-wide. Switch in one window and the rest silently follow.</p></div>
+    <div class="term good"><div class="bar"><i></i><i></i><i></i><b class="g">codex-switch (CODEX_HOME per shell)</b></div>
+<pre>window 1  <span class="g">work</span>
+window 2  <span class="g">side</span>
+window 3  <span class="g">client-acme</span></pre>
+<p>The account is a shell variable. Every window keeps its own, at the same time.</p></div>
   </div>
 
-  <h2>Quick start</h2>
-<pre>cx add work                       <span class="dim"># creates ~/.codex-work, runs codex login</span>
-cx use work                       <span class="dim"># switch this shell</span>
-codex                             <span class="dim"># ...now runs as work</span>
-cx work exec "explain this repo"  <span class="dim"># one-shot, without switching</span>
+  <div class="panes">
+    <div class="term"><div class="bar"><i></i><i></i><i></i><b>pane 1</b></div>
+<pre><span class="d">~/code/company-api</span> <span class="p">[codex:work:auto]</span>
+<span class="g">$</span> codex
+<span class="d">signed in as</span> alice@company.com</pre></div>
+    <div class="term"><div class="bar"><i></i><i></i><i></i><b>pane 2</b></div>
+<pre><span class="d">~/code/side-project</span> <span class="p">[codex:side]</span>
+<span class="g">$</span> codex
+<span class="d">signed in as</span> bob@gmail.com</pre></div>
+  </div>
 
-cd ~/code/company-api
-cx bind work                      <span class="dim"># auto-switch whenever you cd in</span></pre>
+  <div class="term"><div class="bar"><i></i><i></i><i></i><b>cx usage</b></div>
+<pre><span class="g">$</span> cx usage
+ codex accounts (<span class="y">*</span> active in this shell, a auto-switch by directory)
+ <span class="y">*</span> <b>default</b>   ~/.codex        alice@gmail.com     <span class="g">pro</span> until 2026-11-02
+              7d <span class="g">6%</span> (reset 4d9h) · credits 61822
+   <b>work</b>      ~/.codex-work   alice@company.com   <span class="g">promax</span> until 2026-10-07
+              7d <span class="g">0%</span> (reset 7d0h) · credits 62500
+   <b>side</b>      ~/.codex-side   bob@gmail.com       <span class="g">team</span> until 2026-10-17
+              5h <span class="g">0%</span> (reset 5h0m) · 7d <span class="y">26%</span> (reset 1d15h)</pre></div>
 
-  <h2>Commands</h2>
-  <div class="tw"><table>
-    <tr><th>Command</th><th>Description</th></tr>
-    <tr><td><code>cx</code> / <code>cx ls</code></td><td>List accounts, emails, plan and subscription expiry</td></tr>
-    <tr><td><code>cx usage</code></td><td>Same, plus live limits per account</td></tr>
-    <tr><td><code>cx use &lt;name&gt;</code> / <code>cx use -</code></td><td>Switch this shell to an account / back to default</td></tr>
-    <tr><td><code>cx &lt;name&gt; [args]</code></td><td>One-shot invocation under that account</td></tr>
-    <tr><td><code>cx add</code> / <code>cx login</code> / <code>cx rm</code></td><td>Create, sign in, or unregister an account</td></tr>
-    <tr><td><code>cx bind</code> / <code>cx unbind</code> / <code>cx binds</code></td><td>Manage project bindings</td></tr>
-  </table></div>
+  <h2>features</h2>
+  <ul>
+    <li><b>parallel</b> — selection is an env var; no global active account to flip</li>
+    <li><b>bind on cd</b> — <code>cx bind work</code> and the repo switches automatically</li>
+    <li><b>usage</b> — plan, expiry, 5h/7d windows, credits for every account</li>
+    <li><b>zero deps</b> — one zsh file, optional python3 for decoding</li>
+  </ul>
 
-  <h2>How it compares</h2>
-  <div class="tw"><table>
-    <tr><th>Style</th><th>How it works</th><th>Parallel?</th></tr>
-    <tr><td>Global switch</td><td>Swap <code>auth.json</code>; one active account machine-wide</td><td>No</td></tr>
-    <tr><td><strong>CODEX_HOME isolation</strong></td><td>One home directory per account; the shell selects one</td><td><strong class="ok">Yes</strong></td></tr>
-  </table></div>
+  <h2>quick start</h2>
+  <div class="term"><pre><span class="g">$</span> cx add work          <span class="d"># new CODEX_HOME + sign in</span>
+<span class="g">$</span> cx use work          <span class="d"># this shell only</span>
+<span class="g">$</span> cx work exec "explain this repo"
+<span class="g">$</span> cx bind work         <span class="d"># auto-switch in this directory</span></pre></div>
 
-  <p style="margin-top:20px;color:var(--muted);font-size:.93rem"><code>cx usage</code> sends each account's own access token to chatgpt.com, the same usage endpoint Codex itself uses. Tokens are never printed or stored elsewhere.</p>
-
-  <footer>MIT licensed · Requires zsh 5.3+ and the official Codex CLI · Uninstall with <code>zsh uninstall.sh</code> (account data is never deleted)</footer>
+  <footer>MIT · zsh 5.3+ · requires the official Codex CLI · <code>cx usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
 </main>
 <script>
-document.getElementById('copy').addEventListener('click',function(e){
-  var b=e.currentTarget;
-  navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(function(){
-    b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500);
-  }).catch(function(){});
-});
+document.getElementById('copy').addEventListener('click',function(e){var b=e.currentTarget;navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1500)}).catch(function(){})});
 </script>
 </body>
 </html>
