@@ -125,6 +125,10 @@ try:
 except urllib.error.HTTPError as e:
     print("token expired (run codex once to refresh)" if e.code in (401, 403) else "HTTP %d" % e.code)
     sys.exit(0)
+except Exception as e:
+    r = getattr(e, "reason", e)
+    print("network error: %s (check proxy: HTTPS_PROXY / system proxy)" % (str(r) or type(r).__name__))
+    sys.exit(0)
 
 def span(s):
     s = int(s)
@@ -213,7 +217,8 @@ cx() {
       cur=$(_cx_current_account)
       print " codex accounts (* active in this shell, a auto-switch by directory)"
       if [[ $2 == (-u|--usage) ]]; then
-        # fetch limits for all accounts in parallel
+        # fetch limits for all accounts in parallel (quiet: no job-control chatter)
+        setopt local_options no_monitor no_notify
         tmp=$(mktemp -d)
         for k in $CX_ACCOUNT_NAMES; do
           _cx_account_usage "$CX_ACCOUNT_HOMES[$k]" >| "$tmp/$k" &
