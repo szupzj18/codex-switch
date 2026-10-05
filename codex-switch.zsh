@@ -48,7 +48,7 @@ _cx_load_registry() {
 
 _cx_load_registry
 
-_cx_reserved=(ls list status use login off reset unset help add rm bind unbind binds version -h --help)
+_cx_reserved=(ls list status usage use login off reset unset help add rm bind unbind binds version -h --help)
 _cx_valid_name() {
   [[ $1 =~ '^[A-Za-z0-9_-]+$' ]] || return 1
   local r
@@ -85,6 +85,69 @@ c = json.loads(base64.urlsafe_b64decode(p))
 print(c.get("email") or c.get("preferred_username") or c.get("sub", "?"))
 PY
   fi
+}
+
+# Plan and subscription expiry from the id_token claims (local, offline).
+# Prints "<plan> <YYYY-MM-DD>"; empty when unavailable.
+_cx_account_plan() {
+  local auth="$1/auth.json"
+  [[ -r $auth ]] && (( $+commands[python3] )) || return 0
+  python3 - "$auth" <<'PY' 2>/dev/null
+import json, sys, base64
+t = (json.load(open(sys.argv[1])).get("tokens") or {}).get("id_token")
+if t:
+    p = t.split(".")[1]
+    p += "=" * (-len(p) % 4)
+    a = json.loads(base64.urlsafe_b64decode(p)).get("https://api.openai.com/auth") or {}
+    if a.get("chatgpt_plan_type"):
+        print(a["chatgpt_plan_type"], (a.get("chatgpt_subscription_active_until") or "?")[:10])
+PY
+}
+
+# Live plan limits for one account via the ChatGPT usage endpoint (the same
+# one Codex itself uses). Sends the account's own access token to chatgpt.com
+# only; never prints tokens. Prints one summary line.
+_cx_account_usage() {
+  local auth="$1/auth.json"
+  [[ -r $auth ]] && (( $+commands[python3] )) || { print "-"; return 0; }
+  python3 - "$auth" <<'PY' 2>/dev/null || print "(unavailable)"
+import json, sys, urllib.request, urllib.error
+t = (json.load(open(sys.argv[1])).get("tokens") or {})
+if not t.get("access_token"):
+    print("-"); sys.exit(0)
+req = urllib.request.Request(
+    "https://chatgpt.com/backend-api/wham/usage",
+    headers={"Authorization": "Bearer " + t["access_token"],
+             "chatgpt-account-id": t.get("account_id", ""),
+             "User-Agent": "codex-switch"})
+try:
+    d = json.load(urllib.request.urlopen(req, timeout=15))
+except urllib.error.HTTPError as e:
+    print("token expired (run codex once to refresh)" if e.code in (401, 403) else "HTTP %d" % e.code)
+    sys.exit(0)
+
+def span(s):
+    s = int(s)
+    return "%dd" % (s // 86400) if s >= 86400 else "%dh" % (s // 3600) if s >= 3600 else "%dm" % (s // 60)
+
+def left(s):
+    s = int(s)
+    d, h, m = s // 86400, s % 86400 // 3600, s % 3600 // 60
+    return "%dd%dh" % (d, h) if d else "%dh%dm" % (h, m)
+
+rl = d.get("rate_limit") or {}
+parts = []
+for k in ("primary_window", "secondary_window"):
+    w = rl.get(k)
+    if w:
+        parts.append("%s %d%% (reset %s)" % (span(w["limit_window_seconds"]), w["used_percent"], left(w["reset_after_seconds"])))
+if rl.get("limit_reached"):
+    parts.append("LIMIT REACHED")
+c = d.get("credits") or {}
+if c.get("has_credits") and c.get("balance"):
+    parts.append("credits %s" % int(float(c["balance"])))
+print(" · ".join(parts) or "-")
+PY
 }
 
 _cx_current_account() {
@@ -146,16 +209,31 @@ cx() {
   local sub="${1:-ls}"
   case $sub in
     ls|list|status)
-      local cur k email mark
+      local cur k email plan mark tmp
       cur=$(_cx_current_account)
       print " codex accounts (* active in this shell, a auto-switch by directory)"
+      if [[ $2 == (-u|--usage) ]]; then
+        # fetch limits for all accounts in parallel
+        tmp=$(mktemp -d)
+        for k in $CX_ACCOUNT_NAMES; do
+          _cx_account_usage "$CX_ACCOUNT_HOMES[$k]" >| "$tmp/$k" &
+        done
+        wait
+      fi
       for k in $CX_ACCOUNT_NAMES; do
         email=$(_cx_account_email "$CX_ACCOUNT_HOMES[$k]")
+        plan=$(_cx_account_plan "$CX_ACCOUNT_HOMES[$k]")
         mark=" "
         [[ $k == $cur ]] && mark="*"
         [[ $CX_AUTO_ACTIVE == $k ]] && mark="a"
-        printf ' %s %-12s %-18s %s\n' "$mark" "$k" "${CX_ACCOUNT_HOMES[$k]/#$HOME/~}" "$email"
+        printf ' %s %-12s %-18s %-42s %s\n' "$mark" "$k" "${CX_ACCOUNT_HOMES[$k]/#$HOME/~}" "$email" "${plan:+${plan% *} until ${plan#* }}"
+        if [[ -n $tmp ]]; then printf '   %-12s %s\n' "" "$(<$tmp/$k)"; fi
       done
+      if [[ -n $tmp ]]; then rm -rf "$tmp"; fi
+      ;;
+
+    usage)
+      cx ls --usage
       ;;
 
     use)
@@ -332,7 +410,8 @@ cx() {
     help|-h|--help)
       print -P -- "%Bcx%b — CodeX Switch: parallel multi-account manager for Codex CLI"
       cat <<EOF
-  cx                         list accounts and signed-in emails
+  cx                         list accounts, emails, plan and subscription expiry
+  cx usage                   same, plus live plan limits (5h/7d windows, credits)
   cx use <name>              switch this shell to <name> (RPROMPT marker)
   cx use -                   switch this shell back to default
   cx <name> [codex args]     one-shot invocation, e.g.  cx work exec "..."
@@ -394,7 +473,7 @@ fi
 _cx() {
   if (( CURRENT == 2 )); then
     _alternative \
-      'subcommands:cx command:(ls use login off add rm bind unbind binds version help)' \
+      'subcommands:cx command:(ls usage use login off add rm bind unbind binds version help)' \
       "accounts:codex account:($CX_ACCOUNT_NAMES)"
   elif (( CURRENT == 3 )); then
     case $words[2] in
