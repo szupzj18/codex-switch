@@ -72,7 +72,14 @@ claims = {"email": "work@example.com", "https://api.openai.com/auth": {
 json.dump({"tokens": {"id_token": b({"alg": "none"}) + "." + b(claims) + ".sig"}}, open(sys.argv[1], "w"))
 PY
 out=$(cx ls)
-contains "$out" "pro until 2030-01-02" "plan and expiry decode"
+contains "$out" "pro" "plan decode"
+contains "$out" "2030-01-02" "expiry decode"
+not_contains "$out" $'\033' "no ANSI colors when not a TTY"
+out=$(cx ls -v)
+contains "$out" "~/.codex-work" "verbose view shows home paths"
+contains "$out" "exp 2030-01-02" "verbose view shows expiry"
+out=$(CX_COLOR=always cx ls)
+contains "$out" $'\033[' "CX_COLOR=always forces colors"
 ok "cx ls shows plan and subscription expiry"
 
 # ---- 3. add / use ------------------------------------------------------------

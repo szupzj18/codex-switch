@@ -87,70 +87,202 @@ PY
   fi
 }
 
-# Plan and subscription expiry from the id_token claims (local, offline).
-# Prints "<plan> <YYYY-MM-DD>"; empty when unavailable.
-_cx_account_plan() {
-  local auth="$1/auth.json"
-  [[ -r $auth ]] && (( $+commands[python3] )) || return 0
-  python3 - "$auth" <<'PY' 2>/dev/null
-import json, sys, base64
-t = (json.load(open(sys.argv[1])).get("tokens") or {}).get("id_token")
-if t:
-    p = t.split(".")[1]
-    p += "=" * (-len(p) % 4)
-    a = json.loads(base64.urlsafe_b64decode(p)).get("https://api.openai.com/auth") or {}
-    if a.get("chatgpt_plan_type"):
-        print(a["chatgpt_plan_type"], (a.get("chatgpt_subscription_active_until") or "?")[:10])
-PY
-}
+# Render the account table. $1: 1 = fetch live limits, $2: 1 = verbose blocks.
+# Colors only on a TTY (or CX_COLOR=always); NO_COLOR disables them.
+_cx_render() {
+  local online=$1 verbose=$2 color=0 k
+  [[ ( -t 1 && -z $NO_COLOR ) || $CX_COLOR == always ]] && color=1
+  local -a args
+  for k in $CX_ACCOUNT_NAMES; do args+=("$k=$CX_ACCOUNT_HOMES[$k]"); done
+  PYTHONIOENCODING=utf-8 python3 - $online $verbose $color "$(_cx_current_account)" "$CX_AUTO_ACTIVE" $args <<'PY'
+import json, sys, os, math, base64, urllib.request, urllib.error
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, timedelta
 
-# Live plan limits for one account via the ChatGPT usage endpoint (the same
-# one Codex itself uses). Sends the account's own access token to chatgpt.com
-# only; never prints tokens. Prints one summary line.
-_cx_account_usage() {
-  local auth="$1/auth.json"
-  [[ -r $auth ]] && (( $+commands[python3] )) || { print "-"; return 0; }
-  python3 - "$auth" <<'PY' 2>/dev/null || print "(unavailable)"
-import json, sys, urllib.request, urllib.error
-t = (json.load(open(sys.argv[1])).get("tokens") or {})
-if not t.get("access_token"):
-    print("-"); sys.exit(0)
-req = urllib.request.Request(
-    "https://chatgpt.com/backend-api/wham/usage",
-    headers={"Authorization": "Bearer " + t["access_token"],
-             "chatgpt-account-id": t.get("account_id", ""),
-             "User-Agent": "codex-switch"})
-try:
-    d = json.load(urllib.request.urlopen(req, timeout=15))
-except urllib.error.HTTPError as e:
-    print("token expired (run codex once to refresh)" if e.code in (401, 403) else "HTTP %d" % e.code)
-    sys.exit(0)
-except Exception as e:
-    r = getattr(e, "reason", e)
-    print("network error: %s (check proxy: HTTPS_PROXY / system proxy)" % (str(r) or type(r).__name__))
-    sys.exit(0)
+online, verbose, color = (sys.argv[i] == "1" for i in (1, 2, 3))
+cur, auto = sys.argv[4], sys.argv[5]
+accts = [a.split("=", 1) for a in sys.argv[6:]]
+HOME = os.environ.get("HOME", "")
 
-def span(s):
-    s = int(s)
-    return "%dd" % (s // 86400) if s >= 86400 else "%dh" % (s // 3600) if s >= 3600 else "%dm" % (s // 60)
+def paint(code, s):
+    return "\033[%sm%s\033[0m" % (code, s) if color and code else s
+
+def load(home):
+    r = {"email": None, "plan": None, "until": None, "tok": {}, "state": "ok"}
+    try:
+        d = json.load(open(home + "/auth.json"))
+    except Exception:
+        r["state"] = "none"; return r
+    t = d.get("tokens") or {}
+    r["tok"] = t
+    if not t.get("id_token"):
+        r["state"] = "apikey" if d.get("OPENAI_API_KEY") else "none"; return r
+    try:
+        p = t["id_token"].split(".")[1]
+        p += "=" * (-len(p) % 4)
+        c = json.loads(base64.urlsafe_b64decode(p))
+    except Exception:
+        r["state"] = "bad"; return r
+    a = c.get("https://api.openai.com/auth") or {}
+    r["email"] = c.get("email") or c.get("preferred_username") or c.get("sub")
+    r["plan"] = a.get("chatgpt_plan_type")
+    r["until"] = (a.get("chatgpt_subscription_active_until") or "")[:10] or None
+    return r
+
+def fetch(tok):
+    if not tok.get("access_token"):
+        return None, "-"
+    req = urllib.request.Request(
+        "https://chatgpt.com/backend-api/wham/usage",
+        headers={"Authorization": "Bearer " + tok["access_token"],
+                 "chatgpt-account-id": tok.get("account_id", ""),
+                 "User-Agent": "codex-switch"})
+    try:
+        return json.load(urllib.request.urlopen(req, timeout=15)), None
+    except urllib.error.HTTPError as e:
+        return None, ("token expired (run codex once to refresh)" if e.code in (401, 403) else "HTTP %d" % e.code)
+    except Exception as e:
+        r = getattr(e, "reason", e)
+        return None, "network error: %s (check proxy)" % (str(r) or type(r).__name__)
+
+info = {n: load(h) for n, h in accts}
+live = {}
+if online:
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futs = {n: ex.submit(fetch, info[n]["tok"]) for n, _ in accts if info[n]["state"] == "ok"}
+        live = {n: f.result() for n, f in futs.items()}
 
 def left(s):
     s = int(s)
     d, h, m = s // 86400, s % 86400 // 3600, s % 3600 // 60
-    return "%dd%dh" % (d, h) if d else "%dh%dm" % (h, m)
+    return "%dd%dh" % (d, h) if d and h else "%dd" % d if d else "%dh%dm" % (h, m) if h else "%dm" % m
 
-rl = d.get("rate_limit") or {}
-parts = []
-for k in ("primary_window", "secondary_window"):
-    w = rl.get(k)
-    if w:
-        parts.append("%s %d%% (reset %s)" % (span(w["limit_window_seconds"]), w["used_percent"], left(w["reset_after_seconds"])))
-if rl.get("limit_reached"):
-    parts.append("LIMIT REACHED")
-c = d.get("credits") or {}
-if c.get("has_credits") and c.get("balance"):
-    parts.append("credits %s" % int(float(c["balance"])))
-print(" · ".join(parts) or "-")
+def label(s):
+    s = int(s)
+    return "%dH" % (s // 3600) if s < 86400 else "%dD" % (s // 86400)
+
+def pct_code(p):
+    return "31" if p >= 80 else "33" if p >= 50 else "32"
+
+def bar(p, n):
+    f = math.ceil(p / 100 * n) if p > 0 else 0
+    return paint(pct_code(p), "▓" * f) + paint("2", "░" * (n - f))
+
+PLAN = {"pro": "36", "promax": "35", "team": "34", "plus": "32"}
+today = date.today()
+stale = False
+
+def expiry(u):
+    global stale
+    if not u:
+        return "–", "2"
+    try:
+        days = (date.fromisoformat(u) - today).days
+    except ValueError:
+        return u, None
+    if days <= 7:
+        stale = True
+        return u + " ⚠", "31"
+    return u, None
+
+def windows(n):
+    """-> (data, err, [(label, used%, reset_seconds)])"""
+    d, err = live.get(n, (None, None))
+    ws = []
+    if d:
+        rl = d.get("rate_limit") or {}
+        for k in ("primary_window", "secondary_window"):
+            w = rl.get(k)
+            if w:
+                ws.append((label(w["limit_window_seconds"]), w["used_percent"], w["reset_after_seconds"], w["limit_window_seconds"]))
+    return d, err, ws
+
+def short(h):
+    return "~" + h[len(HOME):] if HOME and h.startswith(HOME) else h
+
+def who(n):
+    i = info[n]
+    return i["email"] or {"none": "(not signed in)", "apikey": "API key", "bad": "(unknown)"}.get(i["state"], "?")
+
+def mark(n):
+    return paint("36", "●") if n == cur else paint("33", "◆") if n == auto else " "
+
+def table(rows, header):
+    """rows: list of list of (plain, code). Left-aligned columns, ANSI-safe."""
+    widths = [max(len(r[i][0]) for r in [header] + rows) for i in range(len(header))]
+    for r in [header] + rows:
+        out = []
+        for i, (s, code) in enumerate(r):
+            pad = " " * (widths[i] - len(s))
+            out.append(paint(code, s) + pad if i < len(r) - 1 else paint(code, s))
+        print(" " + "  ".join(out).rstrip())
+
+def head(*cols):
+    return [(c, "2") for c in cols]
+
+print()
+if verbose:
+    sep = paint("2", " " + "─" * 58)
+    for n, h in accts:
+        i = info[n]
+        d, err, ws = windows(n)
+        plan = (d or {}).get("plan_type") or i["plan"]
+        exp, ecode = expiry(i["until"])
+        print(sep)
+        print(" %s %s  %s  %s  %s" % (mark(n), paint("1", "%-10s" % n), who(n),
+              paint(PLAN.get(plan, "2"), plan or "–"), paint(ecode, "exp " + exp) if i["until"] else ""))
+        print("   " + paint("2", short(h)))
+        if err:
+            print("   " + paint("31", err))
+        for lab, p, rs, _ in ws:
+            print("   %-3s %s %3d%%   %s" % (lab.lower(), bar(p, 20), p, paint("2", "resets in " + left(rs))))
+        c = (d or {}).get("credits") or {}
+        if c.get("has_credits") and c.get("balance"):
+            print("   " + paint("2", "credits %s" % format(int(float(c["balance"])), ",")))
+    print(sep)
+elif online:
+    rows = []
+    for n, h in accts:
+        i = info[n]
+        d, err, ws = windows(n)
+        plan = (d or {}).get("plan_type") or i["plan"]
+        exp, ecode = expiry(i["until"])
+        row = [(" " if False else "", None)]
+        row = [(("● " if n == cur else "◆ " if n == auto else "  ") + n, None), (plan or "–", PLAN.get(plan, "2"))]
+        if err or i["state"] != "ok":
+            row.append((err or who(n), "31"))
+            rows.append(row); continue
+        w5 = next((w for w in ws if w[3] < 86400), None)
+        w7 = next((w for w in ws if w[3] >= 86400), None)
+        for w in (w5, w7):
+            if w:
+                row.append(("%s %3d%%" % ("▓" * math.ceil(w[1] / 100 * 6) + "░" * (6 - math.ceil(w[1] / 100 * 6)) if w[1] > 0 else "░" * 6, w[1]), pct_code(w[1])))
+            else:
+                row.append(("–", "2"))
+        row.append((left(w7[2]) if w7 else left(w5[2]) if w5 else "–", None))
+        row.append((exp, ecode))
+        rows.append(row)
+    table(rows, head("  NAME", "PLAN", "5H", "7D", "RESET", "EXPIRES"))
+else:
+    rows = []
+    for n, h in accts:
+        i = info[n]
+        exp, ecode = expiry(i["until"])
+        rows.append([(("● " if n == cur else "◆ " if n == auto else "  ") + n, None),
+                     (who(n), None), (i["plan"] or "–", PLAN.get(i["plan"], "2")), (exp, ecode)])
+    table(rows, head("  NAME", "ACCOUNT", "PLAN", "EXPIRES"))
+
+print()
+notes = []
+if any(n == cur for n, _ in accts) or auto:
+    notes.append("● this shell  ◆ auto-bound directory")
+if stale:
+    notes.append("⚠ expired or within 7 days (date comes from the cached sign-in token, may be stale)")
+if not online:
+    notes.append("cx usage: live limits  ·  cx ls -v: details")
+for t in notes:
+    print(" " + paint("2", t))
+print()
 PY
 }
 
@@ -292,33 +424,29 @@ _cx_apply_binding() {
 cx() {
   local sub="${1:-ls}"
   case $sub in
-    ls|list|status)
-      local cur k email plan mark tmp
-      cur=$(_cx_current_account)
-      print " codex accounts (* active in this shell, a auto-switch by directory)"
-      if [[ $2 == (-u|--usage) ]]; then
-        # fetch limits for all accounts in parallel (quiet: no job-control chatter)
-        setopt local_options no_monitor no_notify
-        tmp=$(mktemp -d)
-        for k in $CX_ACCOUNT_NAMES; do
-          _cx_account_usage "$CX_ACCOUNT_HOMES[$k]" >| "$tmp/$k" &
-        done
-        wait
-      fi
-      for k in $CX_ACCOUNT_NAMES; do
-        email=$(_cx_account_email "$CX_ACCOUNT_HOMES[$k]")
-        plan=$(_cx_account_plan "$CX_ACCOUNT_HOMES[$k]")
-        mark=" "
-        [[ $k == $cur ]] && mark="*"
-        [[ $CX_AUTO_ACTIVE == $k ]] && mark="a"
-        printf ' %s %-12s %-18s %-42s %s\n' "$mark" "$k" "${CX_ACCOUNT_HOMES[$k]/#$HOME/~}" "$email" "${plan:+${plan% *} until ${plan#* }}"
-        if [[ -n $tmp ]]; then printf '   %-12s %s\n' "" "$(<$tmp/$k)"; fi
+    ls|list|status|usage)
+      local want_u=0 want_v=0 a
+      if [[ $sub == usage ]]; then want_u=1; fi
+      for a in "${@:2}"; do
+        case $a in
+          -u|--usage) want_u=1 ;;
+          -v|--verbose) want_v=1 ;;
+          *) print "cx $sub: unknown option $a (use -v)" >&2; return 1 ;;
+        esac
       done
-      if [[ -n $tmp ]]; then rm -rf "$tmp"; fi
-      ;;
-
-    usage)
-      cx ls --usage
+      if (( $+commands[python3] )); then
+        _cx_render $want_u $want_v
+      else
+        local cur k mark
+        cur=$(_cx_current_account)
+        print " codex accounts (* active in this shell, a auto-switch by directory)"
+        for k in $CX_ACCOUNT_NAMES; do
+          mark=" "
+          [[ $k == $cur ]] && mark="*"
+          [[ $CX_AUTO_ACTIVE == $k ]] && mark="a"
+          printf ' %s %-12s %-18s %s\n' "$mark" "$k" "${CX_ACCOUNT_HOMES[$k]/#$HOME/~}" "$(_cx_account_email "$CX_ACCOUNT_HOMES[$k]")"
+        done
+      fi
       ;;
 
     use)
@@ -501,7 +629,7 @@ cx() {
       cat <<EOF
   cx                         list accounts, emails, plan and subscription expiry
   cx setup                   interactive first-run wizard (adopt homes, sign in, add, bind)
-  cx usage                   same, plus live plan limits (5h/7d windows, credits)
+  cx usage [-v]              live limits (5h/7d bars); -v = detailed blocks (also: cx ls -v)
   cx use <name>              switch this shell to <name> (RPROMPT marker)
   cx use -                   switch this shell back to default
   cx <name> [codex args]     one-shot invocation, e.g.  cx work exec "..."

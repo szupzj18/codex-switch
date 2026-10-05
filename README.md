@@ -9,12 +9,16 @@ every other window. Project directories can be bound to an account and
 switch automatically on `cd`.
 
 ```text
-$ cx
- codex accounts (* active in this shell, a auto-switch by directory)
- * default      ~/.codex           alice@gmail.com
-   work         ~/.codex-work      alice@company.com
-   side         ~/.codex-side      bob@gmail.com
+$ cx usage
+   NAME     PLAN    5H           7D           RESET  EXPIRES
+ ● default  pro     –            ▓░░░░░   6%  4d9h   2026-11-02
+   work     promax  –            ░░░░░░   0%  7d     2026-11-07
+   side     team    ░░░░░░   0%  ▓▓░░░░  26%  1d15h  2026-10-17
 ```
+
+`cx usage -v` expands each account into a block with its home directory,
+20-cell usage bars and credits. Colors only appear on a terminal (honors
+`NO_COLOR`; force with `CX_COLOR=always`).
 
 ## Why
 
@@ -67,7 +71,8 @@ cx add side --device-auth         # headless sign-in flow
 cx add client-acme --home ~/codex-homes/acme --no-login
 
 cx                                # list accounts + emails + plan/expiry
-cx usage                          # also show live plan limits (5h/7d windows, credits)
+cx usage                          # compact board with live 5h/7d usage bars
+cx usage -v                       # detailed blocks: home, bars, credits
 cx use work                       # switch this shell
 codex                             # ...now runs as work
 cx use -                          # back to default
@@ -102,7 +107,8 @@ from their parent.
 | Command | Description |
 |---|---|
 | `cx` / `cx ls` | List accounts, home directories, signed-in emails, plan and subscription expiry |
-| `cx usage` | Same, plus live limits per account (queries chatgpt.com with each account's own token) |
+| `cx usage` | Compact board with live 5h/7d usage bars per account (queries chatgpt.com with each account's own token) |
+| `cx usage -v` / `cx ls -v` | Detailed per-account blocks (home directory, 20-cell bars, credits) |
 | `cx setup` | Interactive first-run wizard: adopt existing `~/.codex-*` homes, sign in, add accounts, bind this directory |
 | `cx use <name>` / `cx use -` | Switch this shell to an account / back to default |
 | `cx <name> [codex args...]` | One-shot invocation under that account |
