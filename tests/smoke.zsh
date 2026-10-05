@@ -64,6 +64,17 @@ contains "$out" "three@example.com" "JWT email decode (second account)"
 not_contains "$out" "bad name" "invalid names skipped by discovery"
 ok "first-run seeds default and discovers valid homes"
 
+python3 - "$HOME/.codex-work/auth.json" <<'PY'
+import json, sys, base64
+b = lambda o: base64.urlsafe_b64encode(json.dumps(o).encode()).decode().rstrip("=")
+claims = {"email": "work@example.com", "https://api.openai.com/auth": {
+    "chatgpt_plan_type": "pro", "chatgpt_subscription_active_until": "2030-01-02T00:00:00+00:00"}}
+json.dump({"tokens": {"id_token": b({"alg": "none"}) + "." + b(claims) + ".sig"}}, open(sys.argv[1], "w"))
+PY
+out=$(cx ls)
+contains "$out" "pro until 2030-01-02" "plan and expiry decode"
+ok "cx ls shows plan and subscription expiry"
+
 # ---- 3. add / use ------------------------------------------------------------
 
 fails cx add "bad name"

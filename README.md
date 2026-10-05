@@ -36,7 +36,7 @@ CodeX Switch is a single dependency-free zsh script: no wrapper around the
 
 - zsh 5.3+ (macOS default is fine)
 - The official [Codex CLI](https://developers.openai.com/codex) on `PATH`
-- `python3` optional — only used to decode the signed-in email for `cx ls`
+- `python3` optional — only used to decode the signed-in email, plan and expiry for `cx ls`, and to query limits for `cx usage`
 
 ## Install
 
@@ -65,7 +65,8 @@ cx add work                       # creates ~/.codex-work, runs codex login
 cx add side --device-auth         # headless sign-in flow
 cx add client-acme --home ~/codex-homes/acme --no-login
 
-cx                                # list accounts + signed-in emails
+cx                                # list accounts + emails + plan/expiry
+cx usage                          # also show live plan limits (5h/7d windows, credits)
 cx use work                       # switch this shell
 codex                             # ...now runs as work
 cx use -                          # back to default
@@ -99,7 +100,8 @@ from their parent.
 
 | Command | Description |
 |---|---|
-| `cx` / `cx ls` | List accounts, home directories and signed-in emails |
+| `cx` / `cx ls` | List accounts, home directories, signed-in emails, plan and subscription expiry |
+| `cx usage` | Same, plus live limits per account (queries chatgpt.com with each account's own token) |
 | `cx use <name>` / `cx use -` | Switch this shell to an account / back to default |
 | `cx <name> [codex args...]` | One-shot invocation under that account |
 | `cx login <name>` | (Re)run `codex login` for one account |
