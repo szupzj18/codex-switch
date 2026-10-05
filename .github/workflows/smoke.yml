@@ -7,8 +7,32 @@ on:
   workflow_dispatch:
 
 jobs:
+  # The job name below is a required status check on main; keep it stable.
   smoke:
-    name: smoke (zsh/bash/fish, python ${{ matrix.python }})
+    name: smoke (zsh on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Syntax check
+        run: |
+          python3 -c "import ast,sys; ast.parse(open('cx_core.py').read())"
+          zsh -n codex-switch.zsh
+          sh -n install.sh
+          sh -n uninstall.sh
+
+      - name: zsh smoke tests
+        run: zsh tests/smoke.zsh
+
+  shells:
+    name: smoke (bash + fish, python ${{ matrix.python }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -21,20 +45,13 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Install shells
-        run: sudo apt-get update && sudo apt-get install -y zsh fish
+      - name: Install fish
+        run: sudo apt-get update && sudo apt-get install -y fish
 
       - name: Syntax check
         run: |
-          python3 -c "import ast,sys; ast.parse(open('cx_core.py').read())"
-          zsh -n codex-switch.zsh
           bash -n codex-switch.bash
           fish -n codex-switch.fish
-          sh -n install.sh
-          sh -n uninstall.sh
-
-      - name: zsh smoke tests
-        run: zsh tests/smoke.zsh
 
       - name: bash smoke tests
         run: bash tests/smoke.bash
