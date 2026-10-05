@@ -48,7 +48,7 @@ _cx_load_registry() {
 
 _cx_load_registry
 
-_cx_reserved=(ls list status usage use login off reset unset help add rm bind unbind binds version -h --help)
+_cx_reserved=(ls list status usage setup use login off reset unset help add rm bind unbind binds version -h --help)
 _cx_valid_name() {
   [[ $1 =~ '^[A-Za-z0-9_-]+$' ]] || return 1
   local r
@@ -152,6 +152,86 @@ if c.get("has_credits") and c.get("balance"):
     parts.append("credits %s" % int(float(c["balance"])))
 print(" · ".join(parts) or "-")
 PY
+}
+
+# Interactive yes/no. $1 prompt, $2 default (y|n). EOF on stdin = take the default.
+_cx_confirm() {
+  local ans def="${2:-y}" hint="[Y/n]"
+  [[ $def == n ]] && hint="[y/N]"
+  read -r "ans?$1 $hint " || { ans=""; print; }
+  [[ -z $ans ]] && ans=$def
+  [[ $ans == [Yy]* ]]
+}
+
+# Interactive first-run wizard: check codex, adopt existing ~/.codex-* homes,
+# sign in accounts that need it, optionally add more and bind this directory.
+_cx_setup() {
+  local k d name home ans
+  print -P "%B CodeX Switch setup%b"
+  print
+
+  if (( $+commands[codex] )); then
+    print " ✓ codex found: $(command -v codex)"
+  else
+    print " ! codex not found on PATH — install the Codex CLI first (accounts can still be registered)"
+  fi
+  if (( $+commands[python3] )); then
+    print " ✓ python3 found (email/plan/usage columns enabled)"
+  else
+    print " - python3 not found: email/plan/usage columns will be skipped"
+  fi
+  print
+
+  # 1. adopt unregistered ~/.codex-* homes that already hold a sign-in
+  local -a found
+  for d in "$HOME"/.codex-*(N/); do
+    [[ -r $d/auth.json ]] || continue
+    for k in $CX_ACCOUNT_NAMES; do [[ $CX_ACCOUNT_HOMES[$k] == $d ]] && continue 2; done
+    found+=("$d")
+  done
+  for d in $found; do
+    name="${d:t}"; name="${name#.codex-}"
+    if ! _cx_valid_name "$name" || (( $+CX_ACCOUNT_HOMES[$name] )); then
+      print " - skipping ${d/#$HOME/~}: '$name' is not a usable account name (register it with: cx add <name> --home ${d/#$HOME/~} --no-login)"
+      continue
+    fi
+    if _cx_confirm " Found signed-in home ${d/#$HOME/~} ($(_cx_account_email "$d")). Register as '$name'?" y; then
+      print -r -- "$name	$d" >> "$CX_ACCOUNT_FILE"
+      _cx_load_registry
+    fi
+  done
+
+  # 2. registered accounts without a sign-in
+  for k in $CX_ACCOUNT_NAMES; do
+    [[ -r $CX_ACCOUNT_HOMES[$k]/auth.json ]] && continue
+    if _cx_confirm " Account '$k' is not signed in. Sign in now?" y; then
+      if _cx_confirm "   Use the headless device-code flow instead of the browser?" n; then
+        CODEX_HOME="$CX_ACCOUNT_HOMES[$k]" codex login --device-auth
+      else
+        CODEX_HOME="$CX_ACCOUNT_HOMES[$k]" codex login
+      fi
+    fi
+  done
+
+  # 3. add new accounts
+  while _cx_confirm " Add a new account?" n; do
+    read -r "name?   Account name (letters, digits, - _): " || break
+    [[ -z $name ]] && break
+    if _cx_confirm "   Use the headless device-code flow?" n; then cx add "$name" --device-auth; else cx add "$name"; fi
+  done
+
+  # 4. bind current directory
+  if [[ $PWD != $HOME && ${#CX_ACCOUNT_NAMES} -gt 1 ]]; then
+    read -r "name?"$'\n'" Bind ${PWD/#$HOME/~} to an account (${(j:/:)CX_ACCOUNT_NAMES}), or Enter to skip: " || name=""
+    if [[ -n $name ]]; then cx bind "$name"; fi
+  fi
+
+  print
+  cx ls
+  print
+  if _cx_confirm " Show live plan limits now (cx usage)?" n; then cx usage; fi
+  print
+  print " Done. Try:  cx use <name> && codex     (cx help for everything)"
 }
 
 _cx_current_account() {
@@ -264,6 +344,10 @@ cx() {
         print "cx: usage: cx login <${(j:/:)CX_ACCOUNT_NAMES}>" >&2; return 1
       fi
       CODEX_HOME="$CX_ACCOUNT_HOMES[$name]" codex login
+      ;;
+
+    setup)
+      _cx_setup
       ;;
 
     add)
@@ -416,6 +500,7 @@ cx() {
       print -P -- "%Bcx%b — CodeX Switch: parallel multi-account manager for Codex CLI"
       cat <<EOF
   cx                         list accounts, emails, plan and subscription expiry
+  cx setup                   interactive first-run wizard (adopt homes, sign in, add, bind)
   cx usage                   same, plus live plan limits (5h/7d windows, credits)
   cx use <name>              switch this shell to <name> (RPROMPT marker)
   cx use -                   switch this shell back to default
@@ -478,7 +563,7 @@ fi
 _cx() {
   if (( CURRENT == 2 )); then
     _alternative \
-      'subcommands:cx command:(ls usage use login off add rm bind unbind binds version help)' \
+      'subcommands:cx command:(ls usage setup use login off add rm bind unbind binds version help)' \
       "accounts:codex account:($CX_ACCOUNT_NAMES)"
   elif (( CURRENT == 3 )); then
     case $words[2] in
