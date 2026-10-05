@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CodeX Switch — Codex CLI, many accounts</title>
-<meta name="description" content="Run different Codex CLI accounts in different terminals at the same time. One zsh script, no daemon.">
+<meta name="description" content="Run different Codex CLI accounts in different terminals at the same time. One small Python program, works in zsh, bash and fish. No daemon.">
 <style>
 :root{--bg:#0b0d0c;--panel:#111514;--line:#1f2623;--fg:#d7dedb;--dim:#7b8884;--g:#5eead4;--y:#fbbf24;--p:#c4b5fd;--r:#fb7185}
 *{box-sizing:border-box}
@@ -42,9 +42,9 @@ footer{margin-top:56px;color:var(--dim);font-size:.82rem}
 <main>
   <div class="tag">$ codex-switch --version 0.1.0</div>
   <h1>Many Codex accounts.<br><span>One terminal each.</span></h1>
-  <p>A single zsh script. Every account gets its own <code>CODEX_HOME</code>, so four panes can run four sign-ins at once. No daemon, no proxy, nothing to restart.</p>
+  <p>Works in zsh, bash and fish. Every account gets its own <code>CODEX_HOME</code>, so four panes can run four sign-ins at once. No daemon, no proxy, nothing to restart.</p>
 
-  <div class="cta"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | zsh</code><button id="copy" type="button">copy</button></div>
+  <div class="cta"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | sh</code><button id="copy" type="button">copy</button></div>
   <p><a href="https://github.com/szupzj18/codex-switch">github.com/szupzj18/codex-switch</a></p>
 
   <h2>global switch vs. cx</h2>
@@ -93,7 +93,8 @@ window 3  <span class="g">client-acme</span></pre>
     <li><b>parallel</b> — selection is an env var; no global active account to flip</li>
     <li><b>bind on cd</b> — <code>cx bind work</code> and the repo switches automatically</li>
     <li><b>usage</b> — one-line-per-account board with 5h/7d bars; <code>-v</code> for details and credits</li>
-    <li><b>zero deps</b> — one zsh file, optional python3 for decoding</li>
+    <li><b>any shell</b> — zsh, bash and fish, same commands and the same auto-switch on cd</li>
+    <li><b>zero deps</b> — Python 3.8+ standard library only, nothing to pip install</li>
   </ul>
 
   <h2>quick start</h2>
@@ -102,7 +103,7 @@ window 3  <span class="g">client-acme</span></pre>
 <span class="g">$</span> cx work exec "explain this repo"
 <span class="g">$</span> cx bind work         <span class="d"># auto-switch in this directory</span></pre></div>
 
-  <footer>MIT · zsh 5.3+ · requires the official Codex CLI · <code>cx usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
+  <footer>MIT · zsh, bash or fish · Python 3.8+ · requires the official Codex CLI · <code>cx usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
 </main>
 <script>
 document.getElementById('copy').addEventListener('click',function(e){var b=e.currentTarget;navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1500)}).catch(function(){})});

@@ -1,6 +1,6 @@
 # CodeX Switch
 
-**Parallel multi-account manager for the OpenAI Codex CLI, in zsh.**
+**Parallel multi-account manager for the OpenAI Codex CLI — zsh, bash and fish.**
 
 Each account gets its own `CODEX_HOME` — separate sign-in, sessions, config
 and usage quota. Accounts work **in parallel**: one account per terminal
@@ -33,32 +33,36 @@ Two design styles exist in the wild:
 | Global switch (swap `auth.json`) | One active account machine-wide; restart clients after switching | No — every window flips |
 | **`CODEX_HOME` isolation (this tool)** | One home directory per account; shell selects one | **Yes — different accounts per terminal** |
 
-CodeX Switch is a single dependency-free zsh script: no wrapper around the
+CodeX Switch is one small Python program (standard library only) plus a thin
+layer for each shell: no wrapper around the
 `codex` binary, no daemon, no proxy.
 
 ## Requirements
 
-- zsh 5.3+ (macOS default is fine)
+- zsh 5.3+, bash 3.2+ or fish 3+ (any of them; macOS defaults are fine)
+- `python3` 3.8+ (standard library only — nothing to `pip install`)
 - The official [Codex CLI](https://developers.openai.com/codex) on `PATH`
-- `python3` optional — only used to decode the signed-in email, plan and expiry for `cx ls`, and to query limits for `cx usage`
 
 ## Install
 
 ```shell
-curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | zsh
+curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | sh
 ```
 
 Or clone and install locally:
 
 ```shell
 git clone https://github.com/szupzj18/codex-switch.git
-cd codex-switch && zsh install.sh
+cd codex-switch && sh install.sh
 ```
 
 Open a new terminal and run `cx help`.
 
-The installer adds one `source` block to `~/.zshrc` and copies the script to
-`~/.codex-switch`. Uninstall with `zsh uninstall.sh` (account data is never
+The installer copies the program to `~/.codex-switch` and adds one `source`
+block for each shell it finds: `~/.zshrc`, `~/.bashrc`, and
+`~/.config/fish/conf.d/codex-switch.fish`. Upgrading from the zsh-only 0.1
+needs nothing else: the same `source` line keeps working. Uninstall with
+`sh uninstall.sh` (account data is never
 deleted).
 
 ## Quick start
@@ -127,6 +131,24 @@ All commands and account names offer tab completion. The active account is
 shown in the right prompt (`[codex:work]`, or `[codex:work:auto]` for a
 directory binding).
 
+## Shell support
+
+| | zsh | bash | fish |
+|---|---|---|---|
+| `cx` commands, `cx use`, one-shot | yes | yes | yes |
+| Auto-switch on `cd` (bindings) | `chpwd` hook | `PROMPT_COMMAND` | `--on-variable PWD` |
+| Tab completion | yes | yes | yes |
+| Prompt marker | right prompt, automatic | `$CX_PROMPT_TEXT` | `$CX_PROMPT_TEXT` |
+
+The marker text (`[codex:work]`, `[codex:work:auto]`) is exposed as
+`$CX_PROMPT_TEXT` in every shell. For bash: `PS1='$CX_PROMPT_TEXT \u@\h:\w\$ '`.
+For fish: `function fish_right_prompt; echo $CX_PROMPT_TEXT; end`.
+
+How it works: the shell function `cx` runs `cx_core.py`, which does all the
+work and writes any environment changes it needs (`CODEX_HOME`, binding
+state, prompt marker) to a temporary file that the wrapper then sources.
+That is how one implementation serves every shell.
+
 ## Multiplexers (tmux / Herdr)
 
 Because selection is just an environment variable, every pane is
@@ -146,7 +168,8 @@ A 2x2 grid with four accounts signed in at once works naturally.
 ```text
 ~/.config/codex-switch/accounts.tsv    registered accounts   <name>\t<codex home>
 ~/.config/codex-switch/bindings.tsv    project bindings      <name>\t<project path>
-~/.codex-switch/codex-switch.zsh           the installed script
+~/.codex-switch/cx_core.py                  the program
+~/.codex-switch/codex-switch.{zsh,bash,fish}  per-shell wrappers
 ~/.codex/  ~/.codex-<name>/        per-account Codex homes (untouched by CodeX Switch)
 ```
 
@@ -157,7 +180,7 @@ On first run, `default` (`~/.codex`) is seeded automatically and existing
 
 ## Notes
 
-- `cx ls` decodes the email from each account's JWT `id_token` locally; no
+- `cx ls` decodes the email, plan and expiry from each account's JWT `id_token` locally; no
   token is ever printed or sent anywhere except to OpenAI by Codex itself.
 - This tool never modifies anything inside the account homes — it only sets
   `CODEX_HOME` for the shell and tracks two small TSV files.
@@ -167,8 +190,9 @@ On first run, `default` (`~/.codex`) is seeded automatically and existing
 ## Development
 
 ```shell
-zsh -n codex-switch.zsh         # syntax check
-zsh tests/smoke.zsh             # unit-style checks (isolated temp HOME, no network)
+zsh tests/smoke.zsh             # unit-style checks per shell (isolated temp HOME, no network)
+bash tests/smoke.bash
+fish tests/smoke.fish
 zsh tests/install-e2e.zsh       # full install journey (must run as root in a bare container)
 ```
 
@@ -176,22 +200,23 @@ Run the install E2E locally in a throwaway container:
 
 ```shell
 docker run --rm -v "$PWD":/src:ro -w /src ubuntu:24.04 bash -c \
-  "apt-get update -qq && apt-get install -y -qq zsh python3 && zsh tests/install-e2e.zsh"
+  "apt-get update -qq && apt-get install -y -qq zsh fish python3 && zsh tests/install-e2e.zsh"
 ```
 
-It creates a fresh unprivileged user, runs `install.sh`, exercises every
-command in a real interactive zsh (with a fake `codex` on `PATH`), checks the
-no-python3 fallback, and verifies `uninstall.sh` leaves account data intact.
+It creates a fresh unprivileged user, runs `install.sh`, exercises the
+commands in real interactive zsh, bash and fish shells (with a fake `codex`
+on `PATH`), checks the message shown when python3 is missing, and verifies
+`uninstall.sh` leaves account data intact.
 
-CI (`.github/workflows/smoke.yml`) runs both suites on Linux/zsh for every
-push and pull request; the install E2E runs inside an `ubuntu:24.04`
+CI (`.github/workflows/smoke.yml`) runs every suite for each push and pull
+request (Python 3.8 and 3.12); the install E2E runs inside an `ubuntu:24.04`
 container.
 
 ## Uninstall
 
 ```shell
-zsh uninstall.sh          # remove the zshrc source block
-zsh uninstall.sh --purge  # also remove ~/.codex-switch
+sh uninstall.sh          # remove the rc source blocks
+sh uninstall.sh --purge  # also remove ~/.codex-switch
 ```
 
 Account homes and `~/.config/codex-switch` are kept; delete them yourself if

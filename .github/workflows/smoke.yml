@@ -8,26 +8,39 @@ on:
 
 jobs:
   smoke:
-    name: smoke (zsh on ${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: smoke (zsh/bash/fish, python ${{ matrix.python }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # Linux is free on private repos. Add macos-latest here after the
-        # repo goes public (macOS minutes are billable for private repos).
-        os: [ubuntu-latest]
+        python: ["3.8", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install zsh
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install shells
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
 
       - name: Syntax check
-        run: zsh -n codex-switch.zsh
+        run: |
+          python3 -c "import ast,sys; ast.parse(open('cx_core.py').read())"
+          zsh -n codex-switch.zsh
+          bash -n codex-switch.bash
+          fish -n codex-switch.fish
+          sh -n install.sh
+          sh -n uninstall.sh
 
-      - name: Smoke tests
+      - name: zsh smoke tests
         run: zsh tests/smoke.zsh
+
+      - name: bash smoke tests
+        run: bash tests/smoke.bash
+
+      - name: fish smoke tests
+        run: fish tests/smoke.fish
 
   install-e2e:
     name: install E2E (fresh user, ubuntu:24.04)
@@ -37,10 +50,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install zsh and python3
+      - name: Install zsh, fish and python3
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends zsh python3
+          apt-get install -y --no-install-recommends zsh fish python3
 
       - name: Install-time end-to-end test
         run: zsh tests/install-e2e.zsh
