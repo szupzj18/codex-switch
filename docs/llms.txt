@@ -1,0 +1,80 @@
+# CodeX Switch
+
+> Parallel multi-account manager for the OpenAI Codex CLI. Each account gets its own CODEX_HOME directory; a shell function `cx` picks one per terminal, so several accounts can be used at the same time. Works in zsh, bash and fish. MIT licensed.
+
+Repo: https://github.com/szupzj18/codex-switch
+Site: https://szupzj18.github.io/codex-switch/
+This file: https://szupzj18.github.io/codex-switch/llms.txt
+Full docs: https://github.com/szupzj18/codex-switch/blob/main/README.md
+
+## What it is (and is not)
+
+- One Python 3.8+ program (`cx_core.py`, standard library only) plus a thin wrapper per shell (`codex-switch.zsh`, `.bash`, `.fish`).
+- Isolation is done by setting the `CODEX_HOME` environment variable. There is no global "active account", no daemon, no proxy, and no wrapper around the `codex` binary.
+- It manages the Codex CLI only. The Codex desktop app and the VS Code extension do not read CODEX_HOME.
+- It never modifies anything inside an account's home directory.
+
+## Requirements
+
+- zsh 5.3+, bash 3.2+ or fish 3+
+- python3 3.8+
+- The official Codex CLI on PATH (needed for sign-in and one-shot runs)
+
+## Install
+
+    curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | sh
+
+This copies the files to ~/.codex-switch (override with CX_HOME) and appends a marked `source` block to ~/.zshrc, ~/.bashrc and ~/.config/fish/conf.d/codex-switch.fish for the shells it finds. It is idempotent. A new terminal is required afterwards.
+Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/uninstall.sh | sh -s -- --purge` (drop `--purge` to keep ~/.codex-switch). Account data is never deleted.
+
+## Commands
+
+    cx                         list accounts: email, plan, subscription expiry
+    cx usage [-v]              same plus live limits (5h/7d windows, reset time); -v = detailed blocks (also: cx ls -v)
+    cx setup                   interactive first-run wizard (adopt existing homes, sign in, add accounts, bind a directory)
+    cx add <name>              create account <name> (home ~/.codex-<name>) and run `codex login`
+        --device-auth            headless device-code sign-in
+        --no-login               register without signing in (then: cx login <name>)
+        --home DIR               register an existing directory instead of ~/.codex-<name>
+    cx login <name>            (re)run `codex login` for one account
+    cx use <name>              set CODEX_HOME for THIS shell only
+    cx use -   |  cx off       clear the switch (back to the default account ~/.codex)
+    cx <name> [codex args]     one-shot: run `codex` with that account's CODEX_HOME, e.g. cx work exec "summarize this repo"
+    cx bind [name]             bind the current directory (and subdirectories) to an account; auto-switch on cd
+    cx unbind [dir]            remove a binding
+    cx binds                   list bindings
+    cx rm <name> [--purge]     unregister an account (data kept unless --purge or confirmed)
+    cx prompt                  print the prompt marker, e.g. [codex:work] or [codex:work:auto]
+    cx version | cx help
+
+Account names: letters, digits, `-` and `_`; they must not collide with a command name. `default` is built-in (~/.codex) and cannot be removed.
+
+## Guidance for agents
+
+- `cx` is a shell FUNCTION, not an executable. It exists only in interactive shells that sourced the wrapper. In a non-interactive subprocess (typical for an agent tool call) use one of:
+  - one-shot: `cx work exec "..."` after sourcing the wrapper, or
+  - set the variable directly, which is all `cx use` does: `CODEX_HOME=~/.codex-work codex exec "..."`, or
+  - call the core: `python3 ~/.codex-switch/cx_core.py <command>` (read-only commands such as `ls`, `usage`, `binds`, `names`, `prompt` work this way; `use`/`off`/`bind` write shell statements to the file named by $CX_EVAL_FILE, which only the wrapper consumes).
+- `cx use` changes only the current shell. It will not persist across separate tool calls.
+- `cx add`, `cx login` and `cx setup` open a browser or wait for input (use `--device-auth` or `--no-login` for headless/non-interactive use). `cx setup` and `cx rm` prompts take defaults on EOF, so they will not hang on closed stdin.
+- To list account names non-interactively: `python3 ~/.codex-switch/cx_core.py names`.
+- Never print or upload `auth.json` contents. `cx` itself only decodes the email, plan and expiry from the id_token locally.
+
+## Files and configuration
+
+    ~/.config/codex-switch/accounts.tsv   registered accounts: <name>\t<codex home>
+    ~/.config/codex-switch/bindings.tsv   directory bindings:  <name>\t<absolute path>  (longest-prefix match)
+    ~/.codex, ~/.codex-<name>/            per-account Codex homes (auth.json, sessions, config)
+    ~/.codex-switch/                      installed program and wrappers
+
+Environment variables: CX_CONFIG_DIR (registry location), CX_HOME (install dir), NO_COLOR (disable colors), CX_COLOR=always (force colors), CX_AUTO_ACTIVE (internal binding state).
+On first run `default` is seeded and any ~/.codex-* directory that already contains an auth.json is registered automatically.
+
+## Behavior worth knowing
+
+- Auto-switch on cd: zsh uses the chpwd hook, bash uses PROMPT_COMMAND, fish uses --on-variable PWD. Leaving a bound directory restores the account that was active before entering it.
+- Prompt marker: zsh shows it in the right prompt automatically; in bash and fish it is exposed as $CX_PROMPT_TEXT.
+- Output is plain text (no colors) when not a TTY.
+- `cx usage` sends each account's own access token to https://chatgpt.com/backend-api/wham/usage (the endpoint Codex itself uses) and nowhere else. If it fails it prints the reason, e.g. "token expired (run codex once to refresh)" or "network error: ... (check proxy)".
+- The EXPIRES column comes from the cached sign-in token and can be stale after a renewal (marked with a warning sign); the live limits are authoritative.
+- Not supported: API-key login, importing a token or auth.json with a single command, Windows.
