@@ -131,6 +131,11 @@ All commands and account names offer tab completion. The active account is
 shown in the right prompt (`[codex:work]`, or `[codex:work:auto]` for a
 directory binding).
 
+## For AI agents
+
+An agent-readable summary (commands, non-interactive usage, files, caveats) is
+served at <https://szupzj18.github.io/codex-switch/llms.txt>.
+
 ## Shell support
 
 | | zsh | bash | fish |
