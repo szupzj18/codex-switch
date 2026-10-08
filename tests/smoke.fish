@@ -36,53 +36,53 @@ printf '{"tokens":{"id_token":"%s"}}' $jwt > $HOME/.codex-work/auth.json
 
 source $root/zorua.fish
 
-set -l out (cx ls | string collect)
+set -l out (zorua ls | string collect)
 contains_str $out work@example.com "discovers signed-in home"
 contains_str $out 2030-01-02 "expiry column"
 ok "first run + ls"
 
-contains_str (cx version | string collect) "Zorua" version
+contains_str (zorua version | string collect) "Zorua" version
 ok version
 
 set -l side $tmp/side-home
 mkdir $side
-cx add side --no-login --home $side >/dev/null
-contains_str (cx ls | string collect) side "add registers"
-cx add side 2>/dev/null; and die "duplicate add should fail"
-cx use side >/dev/null
+zorua add side --no-login --home $side >/dev/null
+contains_str (zorua ls | string collect) side "add registers"
+zorua add side 2>/dev/null; and die "duplicate add should fail"
+zorua use side >/dev/null
 test "$CODEX_HOME" = "$side"; or die "use did not set CODEX_HOME ($CODEX_HOME)"
-test "$CX_PROMPT_TEXT" = "[codex:side]"; or die "prompt text: $CX_PROMPT_TEXT"
-cx use - >/dev/null
+test "$ZORUA_PROMPT_TEXT" = "[codex:side]"; or die "prompt text: $ZORUA_PROMPT_TEXT"
+zorua use - >/dev/null
 test -z "$CODEX_HOME"; or die "use - did not clear"
 ok "add / use / prompt marker"
 
 set -l proj $tmp/proj/sub/deeper
 mkdir -p $proj
 cd $tmp/proj
-cx bind side >/dev/null
+zorua bind side >/dev/null
 test "$CODEX_HOME" = "$side"; or die "bind did not apply"
 cd $HOME
 test -z "$CODEX_HOME"; or die "leaving bound dir did not restore ($CODEX_HOME)"
 cd $proj
 test "$CODEX_HOME" = "$side"; or die "entering subdir did not switch"
-test "$CX_AUTO_ACTIVE" = side; or die "auto state"
+test "$ZORUA_AUTO_ACTIVE" = side; or die "auto state"
 cd $HOME
 begin
-    test -z "$CODEX_HOME"; and test -z "$CX_AUTO_ACTIVE"
+    test -z "$CODEX_HOME"; and test -z "$ZORUA_AUTO_ACTIVE"
 end; or die "state not cleared on leave"
 ok "bind + cd hook"
 
-cx rm side </dev/null >/dev/null
+zorua rm side </dev/null >/dev/null
 test -d $side; or die "rm without --purge must keep data"
-cx add side --no-login --home $side >/dev/null
-cx rm side --purge >/dev/null
+zorua add side --no-login --home $side >/dev/null
+zorua rm side --purge >/dev/null
 test -d $side; and die "--purge must delete"
 ok "rm / --purge"
 
 mkdir $tmp/bin
 printf '#!/bin/sh\necho "FAKE_HOME=$CODEX_HOME"\necho "ARGS=$*"\n' > $tmp/bin/codex
 chmod +x $tmp/bin/codex
-set -l one (begin; set -lx PATH $tmp/bin $PATH; fish -c "source $root/zorua.fish; cx work hello-world"; end | string collect)
+set -l one (begin; set -lx PATH $tmp/bin $PATH; fish -c "source $root/zorua.fish; zorua work hello-world"; end | string collect)
 contains_str $one "FAKE_HOME=$HOME/.codex-work" "one-shot home"
 contains_str $one "ARGS=hello-world" "one-shot args"
 ok one-shot
@@ -91,14 +91,14 @@ mkdir $tmp/cbin
 cp $root/tests/fake-claude $tmp/cbin/claude
 set -l oldpath $PATH
 set -gx PATH $tmp/cbin $PATH
-cx add --claude alt >/dev/null; or die "add --claude failed"
-contains_str (cx ls | string collect) claude@example.com "claude account listed"
-cx use alt >/dev/null 2>&1
+zorua add --claude alt >/dev/null; or die "add --claude failed"
+contains_str (zorua ls | string collect) claude@example.com "claude account listed"
+zorua use alt >/dev/null 2>&1
 test "$CLAUDE_CONFIG_DIR" = "$HOME/.claude-alt"; or die "use alt did not set CLAUDE_CONFIG_DIR ($CLAUDE_CONFIG_DIR)"
-test "$CX_PROMPT_TEXT" = "[claude:alt]"; or die "prompt text: $CX_PROMPT_TEXT"
-cx use - >/dev/null
+test "$ZORUA_PROMPT_TEXT" = "[claude:alt]"; or die "prompt text: $ZORUA_PROMPT_TEXT"
+zorua use - >/dev/null
 test -z "$CLAUDE_CONFIG_DIR"; or die "use - did not clear CLAUDE_CONFIG_DIR"
-cx rm alt --purge >/dev/null
+zorua rm alt --purge >/dev/null
 set -gx PATH $oldpath
 ok "claude accounts"
 

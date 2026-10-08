@@ -23,7 +23,7 @@ jobs:
 
       - name: Syntax check
         run: |
-          python3 -c "import ast,sys; ast.parse(open('cx_core.py').read())"
+          python3 -c "import ast,sys; ast.parse(open('zorua_core.py').read())"
           zsh -n zorua.zsh
           sh -n install.sh
           sh -n uninstall.sh
@@ -75,4 +75,4 @@ jobs:
       - name: Install-time end-to-end test
         run: zsh tests/install-e2e.zsh
         env:
-          CX_E2E_SRC: ${{ github.workspace }}
+          ZORUA_E2E_SRC: ${{ github.workspace }}

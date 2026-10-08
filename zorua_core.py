@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Zorua core: shell-independent logic for the `cx` command.
+"""Zorua core: shell-independent logic for the `zorua` command.
 
 The per-shell wrappers (zorua.zsh / .bash / .fish) are thin: they run
-this program and then `source` the statements it wrote to $CX_EVAL_FILE
+this program and then `source` the statements it wrote to $ZORUA_EVAL_FILE
 (CODEX_HOME changes, auto-binding state, prompt marker). Everything else
 (registry, bindings, rendering, login, setup wizard) lives here.
 
@@ -21,14 +21,15 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 HOME = os.path.expanduser("~")
-CONFIG_DIR = os.environ.get("CX_CONFIG_DIR") or os.path.join(
+# CX_* are the pre-rename names of the user-facing variables; still honoured.
+CONFIG_DIR = os.environ.get("ZORUA_CONFIG_DIR") or os.environ.get("CX_CONFIG_DIR") or os.path.join(
     os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "zorua")
 ACCOUNT_FILE = os.path.join(CONFIG_DIR, "accounts.tsv")
 BINDING_FILE = os.path.join(CONFIG_DIR, "bindings.tsv")
 CLAUDE_FILE = os.path.join(CONFIG_DIR, "claude-accounts.tsv")
-SHELL = os.environ.get("CX_SHELL", "zsh")
+SHELL = os.environ.get("ZORUA_SHELL", "zsh")
 RESERVED = {"ls", "list", "status", "usage", "setup", "use", "login", "off", "reset",
             "unset", "help", "add", "rm", "bind", "unbind", "binds", "version",
             "prompt", "apply", "names", "hook", "-h", "--help", "-v", "--version"}
@@ -66,7 +67,7 @@ class Emitter:
         self.lines.append("set -e %s" % name if SHELL == "fish" else "unset %s" % name)
 
     def flush(self):
-        path = os.environ.get("CX_EVAL_FILE")
+        path = os.environ.get("ZORUA_EVAL_FILE")
         if path and self.lines:
             with open(path, "w") as f:
                 f.write("\n".join(self.lines) + "\n")
@@ -117,7 +118,7 @@ LEGACY_CONFIG_DIR = os.path.join(os.path.dirname(CONFIG_DIR), "codex-switch")
 
 def migrate_legacy_config():
     """Zorua was called codex-switch: copy its registry/bindings once (the old files stay as a backup)."""
-    if os.path.exists(ACCOUNT_FILE) or os.environ.get("CX_CONFIG_DIR"):
+    if os.path.exists(ACCOUNT_FILE) or os.environ.get("ZORUA_CONFIG_DIR") or os.environ.get("CX_CONFIG_DIR"):
         return
     legacy = os.path.join(LEGACY_CONFIG_DIR, "accounts.tsv")
     if not os.path.exists(legacy):
@@ -185,8 +186,8 @@ def all_accounts():
 VARS = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR"}
 # kind -> (env var the wrapper passes in, shell variable we set, env var for the pre-auto home, shell var for it)
 AUTO_VARS = {
-    "codex": ("CX_AUTO_ACTIVE", "CX_AUTO_ACTIVE", "CX_PRE_AUTO_HOME", "_CX_PRE_AUTO_HOME"),
-    "claude": ("CX_AUTO_CLAUDE", "CX_AUTO_CLAUDE", "CX_PRE_AUTO_CLAUDE", "_CX_PRE_AUTO_CLAUDE"),
+    "codex": ("ZORUA_AUTO_ACTIVE", "ZORUA_AUTO_ACTIVE", "ZORUA_PRE_AUTO_HOME", "_ZORUA_PRE_AUTO_HOME"),
+    "claude": ("ZORUA_AUTO_CLAUDE", "ZORUA_AUTO_CLAUDE", "ZORUA_PRE_AUTO_CLAUDE", "_ZORUA_PRE_AUTO_CLAUDE"),
 }
 
 # Variables that outrank (or redirect) a Claude subscription login. See
@@ -214,12 +215,14 @@ def claude_clean_env(home):
 
 
 def claude_usage_cache(home):
-    """-> dict from the status-line relay's cache (see cx_statusline.py) or None."""
-    try:
-        with open(os.path.join(home, ".cx-usage.json")) as f:
-            return json.load(f)
-    except Exception:
-        return None
+    """-> dict from the status-line relay's cache (see zorua_statusline.py) or None."""
+    for fn in (".zorua-usage.json", ".cx-usage.json"):       # second: written by 0.4.0 relays
+        try:
+            with open(os.path.join(home, fn)) as f:
+                return json.load(f)
+        except Exception:
+            continue
+    return None
 
 
 def claude_status(home):
@@ -318,9 +321,9 @@ class State:
     def prompt(self):
         """Emit marker variables the wrappers use for the prompt."""
         kind, name, text = self.prompt_info()
-        EMIT.setvar("CX_PROMPT_KIND", kind)
-        EMIT.setvar("CX_PROMPT_NAME", name)
-        EMIT.setvar("CX_PROMPT_TEXT", text)
+        EMIT.setvar("ZORUA_PROMPT_KIND", kind)
+        EMIT.setvar("ZORUA_PROMPT_NAME", name)
+        EMIT.setvar("ZORUA_PROMPT_TEXT", text)
 
 
 def apply_binding(st, pwd):
@@ -343,13 +346,13 @@ def apply_binding(st, pwd):
 # --------------------------------------------------------------------------
 
 def render(online, verbose):
-    color = (sys.stdout.isatty() and not os.environ.get("NO_COLOR")) or os.environ.get("CX_COLOR") == "always"
+    color = (sys.stdout.isatty() and not os.environ.get("NO_COLOR")) or "always" in (os.environ.get("ZORUA_COLOR"), os.environ.get("CX_COLOR"))
     all_acc = all_accounts()
     accts = [(n, h) for n, h, _ in all_acc]
     kind = {n: k for n, _, k in all_acc}
     has_claude = any(k == "claude" for k in kind.values())
     cur = {"codex": current_account("codex"), "claude": current_account("claude")}
-    auto = {"codex": os.environ.get("CX_AUTO_ACTIVE", ""), "claude": os.environ.get("CX_AUTO_CLAUDE", "")}
+    auto = {"codex": os.environ.get("ZORUA_AUTO_ACTIVE", ""), "claude": os.environ.get("ZORUA_AUTO_CLAUDE", "")}
 
     def is_cur(n):
         return cur[kind[n]] == n
@@ -596,11 +599,11 @@ def render(online, verbose):
             if claude_age.get(n) is not None:
                 notes.append("%s: Claude usage as of %s ago (from its last session)" % (n, ago(claude_age[n])))
             else:
-                notes.append("%s: no Claude usage yet — run 'cx hook install %s', then use claude once" % (n, n))
+                notes.append("%s: no Claude usage yet — run 'zorua hook install %s', then use claude once" % (n, n))
     if stale[0]:
         notes.append("⚠ expired or within 7 days (date comes from the cached sign-in token, may be stale)")
     if not online:
-        notes.append("cx usage: live limits  ·  cx ls -v: details")
+        notes.append("zorua usage: live limits  ·  zorua ls -v: details")
     for t in notes:
         print(" " + paint("2", t))
     print()
@@ -636,7 +639,7 @@ def run_codex_login(home, device=False):
     try:
         return subprocess.call(cmd, env=env)
     except FileNotFoundError:
-        err("cx: codex not found on PATH — install the Codex CLI first")
+        err("zorua: codex not found on PATH — install the Codex CLI first")
         return 127
 
 
@@ -669,7 +672,7 @@ def cmd_ls(args, usage=False):
         elif a in ("-v", "--verbose"):
             verbose = True
         else:
-            err("cx ls: unknown option %s (use -v)" % a)
+            err("zorua ls: unknown option %s (use -v)" % a)
             return 1
     render(online, verbose)
     return 0
@@ -681,8 +684,8 @@ def claude_override_warning(home):
     if os.environ.get("ANTHROPIC_BASE_URL"):
         present.append("ANTHROPIC_BASE_URL")
     if present:
-        err("cx: warning: %s %s set in this shell and may override or redirect the account's own login "
-            "(unset them, or use the one-shot form 'cx <name> ...', which cleans them)"
+        err("zorua: warning: %s %s set in this shell and may override or redirect the account's own login "
+            "(unset them, or use the one-shot form 'zorua <name> ...', which cleans them)"
             % (", ".join(present), "is" if len(present) == 1 else "are"))
 
 
@@ -697,11 +700,11 @@ def cmd_use(args, st):
     kind = kind_of(name)
     if kind is None:
         names = [n for n, _, _ in all_accounts()]
-        err("cx: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
+        err("zorua: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
         return 1
     home = registry(kind)[name]
     if not os.path.isdir(home):
-        err("cx: directory not found: %s" % home)
+        err("zorua: directory not found: %s" % home)
         return 1
     if kind == "codex":
         st.set_home("codex", "" if name == "default" else home)
@@ -725,14 +728,14 @@ def run_claude_login(home):
     try:
         return subprocess.call(["claude", "auth", "login", "--claudeai"], env=claude_clean_env(home))
     except FileNotFoundError:
-        err("cx: claude not found on PATH — install Claude Code first")
+        err("zorua: claude not found on PATH — install Claude Code first")
         return 127
 
 
 def cmd_login(args):
     names = [n for n, _, _ in all_accounts()]
     if not args or kind_of(args[0]) is None:
-        err("cx: usage: cx login <%s>" % "/".join(names))
+        err("zorua: usage: zorua login <%s>" % "/".join(names))
         return 1
     kind = kind_of(args[0])
     home = registry(kind)[args[0]]
@@ -746,7 +749,7 @@ def cmd_add(args):
         a = args[i]
         if a == "--home":
             if i + 1 >= len(args):
-                err("cx add: --home needs a directory")
+                err("zorua add: --home needs a directory")
                 return 1
             home_override = args[i + 1]
             i += 2
@@ -758,26 +761,26 @@ def cmd_add(args):
         elif a == "--claude":
             claude = True
         elif a.startswith("-"):
-            err("cx add: unknown flag %s" % a)
+            err("zorua add: unknown flag %s" % a)
             return 1
         elif not name:
             name = a
         else:
-            err("cx add: unexpected argument %s" % a)
+            err("zorua add: unexpected argument %s" % a)
             return 1
         i += 1
     if not name:
-        err("usage: cx add <name> [--claude] [--home DIR] [--no-login] [--device-auth]")
+        err("usage: zorua add <name> [--claude] [--home DIR] [--no-login] [--device-auth]")
         return 1
     if claude and device:
-        err("cx add: --device-auth is Codex-only (Claude Code signs in through the browser)")
+        err("zorua add: --device-auth is Codex-only (Claude Code signs in through the browser)")
         return 1
     if not valid_name(name):
-        err("cx: name must match [A-Za-z0-9_-] and not collide with a command: %s" % name)
+        err("zorua: name must match [A-Za-z0-9_-] and not collide with a command: %s" % name)
         return 1
     existing = kind_of(name)
     if existing:
-        err("cx: account '%s' already exists (%s): %s" % (name, existing, registry(existing)[name]))
+        err("zorua: account '%s' already exists (%s): %s" % (name, existing, registry(existing)[name]))
         return 1
     if home_override:
         home = os.path.abspath(os.path.expanduser(home_override))
@@ -785,7 +788,7 @@ def cmd_add(args):
         home = os.path.join(HOME, (".claude-%s" if claude else ".codex-%s") % name)
     for n, p, k in all_accounts():
         if p == home:
-            err("cx: directory already registered as account '%s': %s" % (n, home))
+            err("zorua: directory already registered as account '%s': %s" % (n, home))
             return 1
     os.makedirs(home, exist_ok=True)
     if claude:
@@ -793,21 +796,21 @@ def cmd_add(args):
         if do_login and not signed_in:
             print("Complete the sign-in in your browser (Claude account: %s)..." % name)
             if run_claude_login(home) != 0:
-                err("cx: login failed; account not registered (directory kept: %s)" % home)
+                err("zorua: login failed; account not registered (directory kept: %s)" % home)
                 return 1
         write_tsv(CLAUDE_FILE, claude_accounts() + [(name, home)])
     else:
         if do_login and not os.path.isfile(os.path.join(home, "auth.json")):
             print("Complete the sign-in in your browser (account: %s)..." % name)
             if run_codex_login(home, device) != 0:
-                err("cx: login failed; account not registered (directory kept: %s)" % home)
+                err("zorua: login failed; account not registered (directory kept: %s)" % home)
                 return 1
         write_tsv(ACCOUNT_FILE, accounts() + [(name, home)])
     print("added %saccount: %s -> %s" % ("claude " if claude else "", name, home))
     signed_in = (claude_status(home).get("loggedIn") if claude
                  else os.path.isfile(os.path.join(home, "auth.json")))
     if not signed_in:
-        print("not signed in yet: run  cx login %s" % name)
+        print("not signed in yet: run  zorua login %s" % name)
     return 0
 
 
@@ -815,19 +818,19 @@ def cmd_rm(args):
     name = args[0] if args else ""
     purge = len(args) > 1 and args[1] == "--purge"
     if not name:
-        err("usage: cx rm <name> [--purge]")
+        err("usage: zorua rm <name> [--purge]")
         return 1
     if name == "default":
-        err("cx: default is built-in and cannot be removed")
+        err("zorua: default is built-in and cannot be removed")
         return 1
     kind = kind_of(name)
     if kind is None:
         names = [n for n, _, _ in all_accounts()]
-        err("cx: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
+        err("zorua: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
         return 1
     home = registry(kind)[name]
     if home == os.environ.get(VARS[kind], ""):
-        err("cx: '%s' is active in this shell; run 'cx use -' first" % name)
+        err("zorua: '%s' is active in this shell; run 'zorua use -' first" % name)
         return 1
     reg_file = CLAUDE_FILE if kind == "claude" else ACCOUNT_FILE
     write_tsv(reg_file, [(n, p) for n, p in read_tsv(reg_file) if n != name])
@@ -841,7 +844,7 @@ def cmd_rm(args):
         shutil.rmtree(home, ignore_errors=True)
         print("deleted data directory: %s" % home)
     elif os.path.isdir(home):
-        print("data directory kept: %s (delete it yourself, or re-register with cx add)" % home)
+        print("data directory kept: %s (delete it yourself, or re-register with zorua add)" % home)
     return 0
 
 
@@ -851,16 +854,16 @@ def cmd_bind(args, st):
     if not name:
         active = [k for k in ("codex", "claude") if st.home[k]]
         if not active:
-            err("cx: currently on default; use 'cx bind <name>' or 'cx use <name>' first")
+            err("zorua: currently on default; use 'zorua bind <name>' or 'zorua use <name>' first")
             return 1
         if len(active) > 1:
-            err("cx: both a codex and a claude account are active; name one: cx bind <name>")
+            err("zorua: both a codex and a claude account are active; name one: zorua bind <name>")
             return 1
         name = current_account(active[0])
     kind = kind_of(name)
     if kind is None:
         names = [n for n, _, _ in all_accounts()]
-        err("cx: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
+        err("zorua: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
         return 1
     rows, existed = [], False
     for n, p in read_tsv(BINDING_FILE):
@@ -883,11 +886,11 @@ def cmd_unbind(args, st):
     d = args[0] if args else cwd()
     rows = read_tsv(BINDING_FILE)
     if not rows:
-        print("cx: no project bindings")
+        print("zorua: no project bindings")
         return 0
     kept = [(n, p) for n, p in rows if p != d]
     if len(kept) == len(rows):
-        print("cx: no binding for %s" % d)
+        print("zorua: no binding for %s" % d)
         return 0
     write_tsv(BINDING_FILE, kept)
     print("unbound: %s" % d)
@@ -898,7 +901,7 @@ def cmd_unbind(args, st):
 def cmd_binds():
     rows = read_tsv(BINDING_FILE)
     if not rows:
-        print("(no project bindings yet — run 'cx bind <name>' inside a project directory)")
+        print("(no project bindings yet — run 'zorua bind <name>' inside a project directory)")
         return 0
     pwd = cwd()
     here = {binding_for(pwd, k) for k in ("codex", "claude")} - {""}
@@ -911,7 +914,7 @@ def cmd_binds():
 
 
 def hook_script():
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cx_statusline.py")
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "zorua_statusline.py")
 
 
 def _shell_path(path):
@@ -922,14 +925,14 @@ def _shell_path(path):
 
 
 def wrap_status_command(orig):
-    """Status-line command that relays through cx_statusline.py but falls back to
+    """Status-line command that relays through zorua_statusline.py but falls back to
     `orig` if the relay (or python3) is missing, e.g. on another machine or after
-    cx was uninstalled, so the status line never breaks."""
+    zorua was uninstalled, so the status line never breaks."""
     script = _shell_path(hook_script())
     guard = "[ -f %s ] && command -v python3 >/dev/null 2>&1" % script
     if not orig:
         return "if %s; then python3 %s; fi" % (guard, script)
-    return ("__cx_orig=%s; if %s; then python3 %s -- \"$__cx_orig\"; else sh -c \"$__cx_orig\"; fi"
+    return ("__zorua_orig=%s; if %s; then python3 %s -- \"$__zorua_orig\"; else sh -c \"$__zorua_orig\"; fi"
             % (shlex.quote(orig), guard, script))
 
 
@@ -938,20 +941,21 @@ def unwrap_status_command(cmd):
 
     Understands the current format and the first (0.3.1) one: python3 <script> -- <orig>.
     """
-    if cmd.startswith("__cx_orig="):
-        try:
-            tok = shlex.split(cmd)[0]
-        except (ValueError, IndexError):
-            return None
-        tok = tok[len("__cx_orig="):]
-        return tok[:-1] if tok.endswith(";") else tok
-    if cmd.startswith("if [ -f ") and "cx_statusline.py" in cmd and cmd.rstrip().endswith("; fi"):
+    for prefix in ("__zorua_orig=", "__cx_orig="):
+        if cmd.startswith(prefix):
+            try:
+                tok = shlex.split(cmd)[0]
+            except (ValueError, IndexError):
+                return None
+            tok = tok[len(prefix):]
+            return tok[:-1] if tok.endswith(";") else tok
+    if cmd.startswith("if [ -f ") and ("zorua_statusline.py" in cmd or "cx_statusline.py" in cmd) and cmd.rstrip().endswith("; fi"):
         return ""
     try:
         parts = shlex.split(cmd)
     except ValueError:
         return None
-    if len(parts) >= 2 and os.path.basename(parts[1]) == "cx_statusline.py":
+    if len(parts) >= 2 and os.path.basename(parts[1]) in ("zorua_statusline.py", "cx_statusline.py"):
         rest = parts[2:]
         if rest[:1] == ["--"]:
             rest = rest[1:]
@@ -968,7 +972,7 @@ def hook_one(action, name, dry=False, yes=False):
     except FileNotFoundError:
         settings = {}
     except ValueError as e:
-        err("cx: cannot parse %s: %s" % (path, e))
+        err("zorua: cannot parse %s: %s" % (path, e))
         return 1
     sl = settings.get("statusLine") if isinstance(settings.get("statusLine"), dict) else {}
     cur = sl.get("command", "") or ""
@@ -999,7 +1003,7 @@ def hook_one(action, name, dry=False, yes=False):
         if orig is None and not cur:
             print("note: '%s' has no status line. Installing adds a minimal one (model, context, 5h/7d)." % name)
             print("      Claude Code hides most footer keyboard hints (esc to interrupt, ? for shortcuts)")
-            print("      while any status line is configured. 'cx hook remove %s' undoes this." % name)
+            print("      while any status line is configured. 'zorua hook remove %s' undoes this." % name)
     else:
         if orig is None:
             print("not installed for %s" % name)
@@ -1018,21 +1022,21 @@ def hook_one(action, name, dry=False, yes=False):
         return 0
     if action == "install" and not cur and not yes:
         if not sys.stdin.isatty():
-            err("cx: refusing to add a status line without confirmation (re-run with --yes)")
+            err("zorua: refusing to add a status line without confirmation (re-run with --yes)")
             return 1
         if not confirm("Add a minimal status line to '%s'?" % name, "n"):
             print("cancelled")
             return 1
     import shutil
     if os.path.exists(path):
-        backup = "%s.cx-bak-%d" % (path, int(time.time()))
+        backup = "%s.zorua-bak-%d" % (path, int(time.time()))
         shutil.copy2(path, backup)
         print("backup: %s" % backup)
     if new_sl is None:
         settings.pop("statusLine", None)
     else:
         settings["statusLine"] = new_sl
-    tmp = path + ".cx.tmp"
+    tmp = path + ".zorua.tmp"
     with open(tmp, "w") as f:
         json.dump(settings, f, indent=2, ensure_ascii=False)
         f.write("\n")
@@ -1044,8 +1048,8 @@ def hook_one(action, name, dry=False, yes=False):
 
 
 def cmd_hook(args):
-    """cx hook install|remove|status [<claude account>|--all] [--dry-run] [--yes]"""
-    usage = "usage: cx hook install|remove <claude-account> [--dry-run] [--yes] | cx hook remove --all | cx hook status [<claude-account>]"
+    """zorua hook install|remove|status [<claude account>|--all] [--dry-run] [--yes]"""
+    usage = "usage: zorua hook install|remove <claude-account> [--dry-run] [--yes] | zorua hook remove --all | zorua hook status [<claude-account>]"
     dry, yes, every = "--dry-run" in args, "--yes" in args, "--all" in args
     args = [a for a in args if a not in ("--dry-run", "--yes", "--all")]
     if not args or args[0] not in ("install", "remove", "status", "refresh") or len(args) > 2:
@@ -1076,7 +1080,7 @@ def cmd_hook(args):
             return 1
     else:
         if kind_of(args[1]) != "claude":
-            err("cx: '%s' is not a Claude account (cx add --claude <name>)" % args[1])
+            err("zorua: '%s' is not a Claude account (zorua add --claude <name>)" % args[1])
             return 1
         targets = [args[1]]
     rc = 0
@@ -1103,34 +1107,34 @@ def hook_installed(name):
     return isinstance(sl, dict) and unwrap_status_command(sl.get("command", "") or "") is not None
 
 
-HELP = """  cx                         list accounts, emails, plan and subscription expiry
-  cx setup                   interactive first-run wizard (adopt homes, sign in, add, bind)
-  cx usage [-v]              live limits (5h/7d bars); -v = detailed blocks (also: cx ls -v)
-  cx use <name>              switch this shell to <name> (sets CODEX_HOME or CLAUDE_CONFIG_DIR)
-  cx use -                   switch this shell back to default
-  cx <name> [args]           one-shot: runs codex (or claude, for a Claude account)
-                             under that account, e.g.  cx work exec "..."
-  cx login <name>            run codex login for one account
-  cx off                     clear the switch
-  cx add <name>              create a Codex account (new CODEX_HOME + sign-in)
-      [--home DIR] [--no-login] [--device-auth]
-  cx add --claude <name>     create a Claude Code subscription account
-      (own CLAUDE_CONFIG_DIR ~/.claude-<name>; sign-in via claude auth login)
-  cx rm <name> [--purge]     unregister (keeps data unless confirmed/--purge)
-  cx bind [name]             bind current directory (default: current account)
-  cx unbind [dir]            remove a directory binding (default: current dir)
-  cx binds                   list project bindings
-  cx hook install <claude>   relay Claude Code's status-line rate_limits into a cache so
-                             cx usage can show 5h/7d (also: hook remove <name>|--all,
-                             hook status [name], --dry-run; an account with no status
-                             line needs --yes or a confirmation)
-  cx prompt                  print the prompt marker (also in $CX_PROMPT_TEXT)
-  cx version                 print Zorua version
+HELP = """  zorua                         list accounts, emails, plan and subscription expiry
+  zorua setup                   interactive first-run wizard (adopt homes, sign in, add, bind)
+  zorua usage [-v]              live limits (5h/7d bars); -v = detailed blocks (also: zorua ls -v)
+  zorua use <name>              switch this shell to <name> (sets CODEX_HOME or CLAUDE_CONFIG_DIR)
+  zorua use -                   switch this shell back to default
+  zorua <name> [args]           one-shot: run codex (or claude, for a Claude account) under that
+                                account, e.g.  zorua work exec "..."
+  zorua login <name>            run codex login (or claude auth login) for one account
+  zorua off                     clear the switch
+  zorua add <name>              create a Codex account (new CODEX_HOME + sign-in)
+                                [--home DIR] [--no-login] [--device-auth]
+  zorua add --claude <name>     create a Claude Code subscription account (own
+                                CLAUDE_CONFIG_DIR ~/.claude-<name>; sign-in via claude auth login)
+  zorua rm <name> [--purge]     unregister (keeps data unless confirmed/--purge)
+  zorua bind [name]             bind current directory (default: current account)
+  zorua unbind [dir]            remove a directory binding (default: current dir)
+  zorua binds                   list project bindings
+  zorua hook install <claude>   relay Claude Code's status-line rate_limits into a cache so
+                                zorua usage can show 5h/7d (also: hook remove <name>|--all,
+                                hook status [name], hook refresh, --dry-run; an account with no
+                                status line needs --yes or a confirmation)
+  zorua prompt                  print the prompt marker (also in $ZORUA_PROMPT_TEXT)
+  zorua version                 print Zorua version
 """
 
 
 def cmd_help():
-    print("cx — Zorua: parallel multi-account manager for Codex CLI")
+    print("Zorua — parallel multi-account manager for Codex CLI and Claude Code (command: zorua)")
     print(HELP)
     print("  accounts: %s" % " ".join(homes()))
     print("  files:    %s" % ACCOUNT_FILE)
@@ -1162,7 +1166,7 @@ def cmd_setup(st):
             continue
         name = e[len(".codex-"):]
         if not valid_name(name) or name in homes():
-            print(" - skipping %s: '%s' is not a usable account name (register it with: cx add <name> --home %s --no-login)"
+            print(" - skipping %s: '%s' is not a usable account name (register it with: zorua add <name> --home %s --no-login)"
                   % (short(d), name, short(d)))
             continue
         if confirm(" Found signed-in home %s (%s). Register as '%s'?" % (short(d), account_email(d), name), "y"):
@@ -1191,10 +1195,10 @@ def cmd_setup(st):
 
     print()
     render(False, False)
-    if confirm(" Show live plan limits now (cx usage)?", "n"):
+    if confirm(" Show live plan limits now (zorua usage)?", "n"):
         render(True, False)
     print()
-    print(" Done. Try:  cx use <name> && codex     (cx help for everything)")
+    print(" Done. Try:  zorua use <name> && codex     (zorua help for everything)")
     return 0
 
 
@@ -1254,9 +1258,9 @@ def main(argv):
             try:
                 os.execvpe(argv[0], argv, env)
             except FileNotFoundError:
-                err("cx: %s not found on PATH" % argv[0])
+                err("zorua: %s not found on PATH" % argv[0])
                 return 127
-        err("cx: unknown command/account '%s' (cx help)" % sub)
+        err("zorua: unknown command/account '%s' (zorua help)" % sub)
         rc = 1
     EMIT.flush()
     return rc
