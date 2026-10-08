@@ -8,7 +8,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/config"
-unset CODEX_HOME CX_AUTO_ACTIVE
+unset CODEX_HOME CX_AUTO_ACTIVE CLAUDE_CONFIG_DIR CX_AUTO_CLAUDE ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL
 mkdir -p "$HOME"
 
 n=0
@@ -93,6 +93,65 @@ out=$(PATH="$TMP/bin:$PATH" cx work hello-world)
 contains "$out" "FAKE_HOME=$HOME/.codex-work" "one-shot home"
 contains "$out" "ARGS=hello-world" "one-shot args"
 ok "one-shot"
+
+
+# ---- Claude Code accounts (phase 1: subscription logins) -------------------
+
+mkdir -p "$TMP/cbin"
+cp "$ROOT/tests/fake-claude" "$TMP/cbin/claude"
+OLDPATH=$PATH
+export PATH="$TMP/cbin:$PATH"
+
+cx add --claude alt >/dev/null
+[ -f "$XDG_CONFIG_HOME/codex-switch/claude-accounts.tsv" ] || die "claude registry not written"
+out=$(cx ls)
+contains "$out" "claude@example.com" "claude account email from claude auth status"
+contains "$out" "max" "claude plan"
+contains "$out" "TOOL" "tool column appears once a claude account exists"
+if cx add --claude work 2>/dev/null; then die "name clash across kinds must fail"; fi
+if cx add --claude x --device-auth 2>/dev/null; then die "--device-auth is codex-only"; fi
+ok "add --claude + ls (shared namespace)"
+
+ALT="$HOME/.claude-alt"
+warn=$(ANTHROPIC_AUTH_TOKEN=secret cx use alt 2>&1 >/dev/null) || true
+contains "$warn" "ANTHROPIC_AUTH_TOKEN" "override warning"
+cx use alt >/dev/null
+[ "$CLAUDE_CONFIG_DIR" = "$ALT" ] || die "use did not set CLAUDE_CONFIG_DIR"
+[ -z "${CODEX_HOME:-}" ] || die "claude use must not touch CODEX_HOME"
+[ "$CX_PROMPT_TEXT" = "[claude:alt]" ] || die "prompt: $CX_PROMPT_TEXT"
+cx use work >/dev/null
+[ "$CX_PROMPT_TEXT" = "[codex:work claude:alt]" ] || die "combined prompt: $CX_PROMPT_TEXT"
+cx use - >/dev/null
+[ -z "${CODEX_HOME:-}" ] && [ -z "${CLAUDE_CONFIG_DIR:-}" ] || die "use - must clear both"
+ok "use (claude) + combined prompt + override warning"
+
+out=$(ANTHROPIC_AUTH_TOKEN=secret ANTHROPIC_BASE_URL=http://127.0.0.1:1 cx alt hello)
+contains "$out" "FAKE_CLAUDE_DIR=$ALT" "one-shot claude dir"
+contains "$out" "TOKEN=unset" "one-shot strips ANTHROPIC_AUTH_TOKEN"
+contains "$out" "BASE=https://api.anthropic.com" "one-shot pins the official base url"
+contains "$out" "ARGS=hello" "one-shot args"
+ok "claude one-shot cleans overrides"
+
+cd "$TMP/proj"
+cx bind alt >/dev/null
+[ "$CLAUDE_CONFIG_DIR" = "$ALT" ] || die "claude bind did not apply"
+cx bind work >/dev/null
+[ "$CODEX_HOME" = "$HOME/.codex-work" ] || die "codex bind in same dir must coexist"
+[ "$CX_PROMPT_TEXT" = "[codex:work:auto claude:alt:auto]" ] || die "auto prompt: $CX_PROMPT_TEXT"
+cd "$HOME"; _cx_prompt_hook
+[ -z "${CLAUDE_CONFIG_DIR:-}" ] && [ -z "${CODEX_HOME:-}" ] || die "leaving must restore both"
+cd "$TMP/proj"; _cx_prompt_hook
+[ "$CLAUDE_CONFIG_DIR" = "$ALT" ] || die "re-entering must switch claude again"
+cx unbind "$TMP/proj" >/dev/null
+[ -z "${CLAUDE_CONFIG_DIR:-}" ] || die "unbind must restore"
+cd "$HOME"
+ok "claude + codex bindings coexist"
+
+cx rm alt --purge >/dev/null
+[ ! -d "$ALT" ] || die "purge must delete claude home"
+not_contains "$(cx ls)" "claude@example.com" "rm unregisters claude account"
+export PATH=$OLDPATH
+ok "rm claude account"
 
 mkdir -p "$HOME/.codex-adopt"
 printf '{"tokens":{"id_token":"%s"}}' "$(mkjwt adopt@example.com)" > "$HOME/.codex-adopt/auth.json"

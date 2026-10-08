@@ -1,6 +1,6 @@
 # CodeX Switch
 
-**Parallel multi-account manager for the OpenAI Codex CLI — zsh, bash and fish.**
+**Parallel multi-account manager for the OpenAI Codex CLI and Claude Code — zsh, bash and fish.**
 
 Each account gets its own `CODEX_HOME` — separate sign-in, sessions, config
 and usage quota. Accounts work **in parallel**: one account per terminal
@@ -19,6 +19,43 @@ $ cx usage
 `cx usage -v` expands each account into a block with its home directory,
 20-cell usage bars and credits. Colors only appear on a terminal (honors
 `NO_COLOR`; force with `CX_COLOR=always`).
+
+## Claude Code accounts
+
+The same shell can also hold Claude Code (subscription) accounts. Each one gets
+its own `CLAUDE_CONFIG_DIR`, which Claude Code itself documents as the way to
+stay signed in to several accounts: settings, history and the login are all
+per directory (on macOS the Keychain entry is keyed by the directory path).
+
+```shell
+cx add --claude alt              # creates ~/.claude-alt, runs `claude auth login`
+cx use alt                       # sets CLAUDE_CONFIG_DIR for this shell only
+cx alt -p "hello"                # one-shot: runs claude under that account
+cx bind alt                      # auto-switch for this directory, like Codex accounts
+cx                               # TOOL column tells codex and claude accounts apart
+```
+
+Codex and Claude accounts share one namespace, so `cx work` always means one
+thing. They are independent in a shell: `cx use work` (codex) and `cx use alt`
+(claude) can be active together and the prompt shows both
+(`[codex:work claude:alt]`). `cx use -` clears both.
+
+Things worth knowing:
+
+- Variables such as `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`,
+  `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_CODE_USE_*` outrank a subscription
+  login, and a set `ANTHROPIC_BASE_URL` redirects requests (for example to a
+  local proxy). `cx use` warns when any of them is present; the one-shot form
+  `cx alt ...` removes them for that run and pins `ANTHROPIC_BASE_URL` to
+  `https://api.anthropic.com` if it was set.
+- Account and plan come from `claude auth status`; live usage limits are not
+  available for Claude accounts.
+- Only subscription (claude.ai) logins are isolated per directory. A Console
+  sign-in without an API key is stored outside the config directory and is
+  shared. Phase 1 does not manage third-party providers or API keys.
+- Always register the directory with the same spelling: the Keychain entry name
+  is derived from the exact path string (a trailing `/` makes a different one).
+  `cx add` stores an absolute path without a trailing slash.
 
 ## Why
 
@@ -115,10 +152,11 @@ from their parent.
 | `cx usage -v` / `cx ls -v` | Detailed per-account blocks (home directory, 20-cell bars, credits) |
 | `cx setup` | Interactive first-run wizard: adopt existing `~/.codex-*` homes, sign in, add accounts, bind this directory |
 | `cx use <name>` / `cx use -` | Switch this shell to an account / back to default |
-| `cx <name> [codex args...]` | One-shot invocation under that account |
+| `cx <name> [args...]` | One-shot invocation under that account (`codex`, or `claude` for a Claude account) |
 | `cx login <name>` | (Re)run `codex login` for one account |
 | `cx off` | Clear the switch in this shell |
-| `cx add <name>` | Create an account: new `CODEX_HOME` + sign-in |
+| `cx add <name>` | Create a Codex account: new `CODEX_HOME` + sign-in |
+| `cx add --claude <name>` | Create a Claude Code subscription account: new `CLAUDE_CONFIG_DIR` + `claude auth login` |
 | `cx add ... --home DIR` | Register an existing home directory instead |
 | `cx add ... --no-login` / `--device-auth` | Skip login / use headless sign-in |
 | `cx rm <name>` / `cx rm <name> --purge` | Unregister (data kept by default; confirm to delete) |
@@ -172,6 +210,7 @@ A 2x2 grid with four accounts signed in at once works naturally.
 
 ```text
 ~/.config/codex-switch/accounts.tsv    registered accounts   <name>\t<codex home>
+~/.config/codex-switch/claude-accounts.tsv  Claude Code accounts <name>\t<config dir>
 ~/.config/codex-switch/bindings.tsv    project bindings      <name>\t<project path>
 ~/.codex-switch/cx_core.py                  the program
 ~/.codex-switch/codex-switch.{zsh,bash,fish}  per-shell wrappers

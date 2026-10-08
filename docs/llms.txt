@@ -1,6 +1,6 @@
 # CodeX Switch
 
-> Parallel multi-account manager for the OpenAI Codex CLI. Each account gets its own CODEX_HOME directory; a shell function `cx` picks one per terminal, so several accounts can be used at the same time. Works in zsh, bash and fish. MIT licensed.
+> Parallel multi-account manager for the OpenAI Codex CLI and Claude Code. Each account gets its own CODEX_HOME (Codex) or CLAUDE_CONFIG_DIR (Claude Code) directory; a shell function `cx` picks one per terminal, so several accounts can be used at the same time. Works in zsh, bash and fish. MIT licensed.
 
 Repo: https://github.com/szupzj18/codex-switch
 Site: https://szupzj18.github.io/codex-switch/
@@ -11,14 +11,15 @@ Full docs: https://github.com/szupzj18/codex-switch/blob/main/README.md
 
 - One Python 3.8+ program (`cx_core.py`, standard library only) plus a thin wrapper per shell (`codex-switch.zsh`, `.bash`, `.fish`).
 - Isolation is done by setting the `CODEX_HOME` environment variable. There is no global "active account", no daemon, no proxy, and no wrapper around the `codex` binary.
-- It manages the Codex CLI only. The Codex desktop app and the VS Code extension do not read CODEX_HOME.
+- It manages the Codex CLI and Claude Code (subscription logins). The Codex desktop app and the VS Code extension do not read CODEX_HOME.
+- Claude Code accounts use Claude Code's own multi-account mechanism: one CLAUDE_CONFIG_DIR per account (settings, history and the login are per directory; on macOS the Keychain entry name is derived from the directory path).
 - It never modifies anything inside an account's home directory.
 
 ## Requirements
 
 - zsh 5.3+, bash 3.2+ or fish 3+
 - python3 3.8+
-- The official Codex CLI on PATH (needed for sign-in and one-shot runs)
+- The official Codex CLI and/or Claude Code on PATH (needed for sign-in and one-shot runs)
 
 ## Install
 
@@ -36,10 +37,12 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/m
         --device-auth            headless device-code sign-in
         --no-login               register without signing in (then: cx login <name>)
         --home DIR               register an existing directory instead of ~/.codex-<name>
-    cx login <name>            (re)run `codex login` for one account
-    cx use <name>              set CODEX_HOME for THIS shell only
+    cx add --claude <name>     create a Claude Code subscription account (home ~/.claude-<name>) and run `claude auth login`
+        --home DIR / --no-login also apply; --device-auth does not (Codex only)
+    cx login <name>            (re)run `codex login` (or `claude auth login`) for one account
+    cx use <name>              set CODEX_HOME (Codex account) or CLAUDE_CONFIG_DIR (Claude account) for THIS shell only
     cx use -   |  cx off       clear the switch (back to the default account ~/.codex)
-    cx <name> [codex args]     one-shot: run `codex` with that account's CODEX_HOME, e.g. cx work exec "summarize this repo"
+    cx <name> [args]           one-shot: run `codex` (or `claude`, for a Claude account) under that account, e.g. cx work exec "summarize this repo"; for Claude accounts inherited ANTHROPIC_* / CLAUDE_CODE_USE_* / CLAUDE_CODE_OAUTH_TOKEN are removed for the run
     cx bind [name]             bind the current directory (and subdirectories) to an account; auto-switch on cd
     cx unbind [dir]            remove a binding
     cx binds                   list bindings
@@ -47,7 +50,7 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/m
     cx prompt                  print the prompt marker, e.g. [codex:work] or [codex:work:auto]
     cx version | cx help
 
-Account names: letters, digits, `-` and `_`; they must not collide with a command name. `default` is built-in (~/.codex) and cannot be removed.
+Account names: letters, digits, `-` and `_`; they must not collide with a command name, and are unique across Codex and Claude accounts. `default` is the built-in Codex account (~/.codex) and cannot be removed.
 
 ## Guidance for agents
 
@@ -63,7 +66,8 @@ Account names: letters, digits, `-` and `_`; they must not collide with a comman
 ## Files and configuration
 
     ~/.config/codex-switch/accounts.tsv   registered accounts: <name>\t<codex home>
-    ~/.config/codex-switch/bindings.tsv   directory bindings:  <name>\t<absolute path>  (longest-prefix match)
+    ~/.config/codex-switch/claude-accounts.tsv  Claude Code accounts: <name>\t<config dir>
+    ~/.config/codex-switch/bindings.tsv   directory bindings:  <name>\t<absolute path>  (longest-prefix match, per tool)
     ~/.codex, ~/.codex-<name>/            per-account Codex homes (auth.json, sessions, config)
     ~/.codex-switch/                      installed program and wrappers
 
@@ -77,4 +81,5 @@ On first run `default` is seeded and any ~/.codex-* directory that already conta
 - Output is plain text (no colors) when not a TTY.
 - `cx usage` sends each account's own access token to https://chatgpt.com/backend-api/wham/usage (the endpoint Codex itself uses) and nowhere else. If it fails it prints the reason, e.g. "token expired (run codex once to refresh)" or "network error: ... (check proxy)".
 - The EXPIRES column comes from the cached sign-in token and can be stale after a renewal (marked with a warning sign); the live limits are authoritative.
-- Not supported: API-key login, importing a token or auth.json with a single command, Windows.
+- Claude Code accounts: account and plan come from `claude auth status`; usage limits are not available. `cx use` on a Claude account warns if ANTHROPIC_AUTH_TOKEN, ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, CLAUDE_CODE_USE_* or ANTHROPIC_BASE_URL is set, because they outrank or redirect the subscription login. Console sign-ins without an API key are stored outside the config directory and are not isolated.
+- Not supported: API-key login, importing a token or auth.json with a single command, third-party Claude providers, Windows.

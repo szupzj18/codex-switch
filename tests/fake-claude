@@ -1,0 +1,16 @@
+#!/bin/sh
+# Test double for the `claude` CLI: a config dir counts as signed in once it
+# contains .fake-login (created by `claude auth login`).
+case "$1 $2" in
+  "auth status")
+    if [ -f "$CLAUDE_CONFIG_DIR/.fake-login" ]; then
+      echo '{"loggedIn":true,"authMethod":"claude.ai","email":"claude@example.com","subscriptionType":"max"}'
+    else
+      echo '{"loggedIn":false,"authMethod":"none"}'
+    fi ;;
+  "auth login") touch "$CLAUDE_CONFIG_DIR/.fake-login" ;;
+  *) echo "FAKE_CLAUDE_DIR=$CLAUDE_CONFIG_DIR"
+     echo "TOKEN=${ANTHROPIC_AUTH_TOKEN:-unset}"
+     echo "BASE=${ANTHROPIC_BASE_URL:-unset}"
+     echo "ARGS=$*" ;;
+esac

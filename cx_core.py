@@ -20,12 +20,13 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 HOME = os.path.expanduser("~")
 CONFIG_DIR = os.environ.get("CX_CONFIG_DIR") or os.path.join(
     os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "codex-switch")
 ACCOUNT_FILE = os.path.join(CONFIG_DIR, "accounts.tsv")
 BINDING_FILE = os.path.join(CONFIG_DIR, "bindings.tsv")
+CLAUDE_FILE = os.path.join(CONFIG_DIR, "claude-accounts.tsv")
 SHELL = os.environ.get("CX_SHELL", "zsh")
 RESERVED = {"ls", "list", "status", "usage", "setup", "use", "login", "off", "reset",
             "unset", "help", "add", "rm", "bind", "unbind", "binds", "version",
@@ -130,12 +131,78 @@ def init_registry():
 
 
 def accounts():
-    """-> ordered list of (name, home)"""
+    """-> ordered list of Codex (name, home)"""
     return read_tsv(ACCOUNT_FILE)
 
 
 def homes():
     return dict(accounts())
+
+
+# Claude Code accounts live in their own registry file (phase 1: subscription
+# logins, isolated through CLAUDE_CONFIG_DIR). Names are unique across both.
+def claude_accounts():
+    return read_tsv(CLAUDE_FILE)
+
+
+def registry(kind):
+    return dict(claude_accounts() if kind == "claude" else accounts())
+
+
+def kind_of(name):
+    if name in homes():
+        return "codex"
+    if name in dict(claude_accounts()):
+        return "claude"
+    return None
+
+
+def all_accounts():
+    """-> [(name, home, kind)] Codex first, then Claude."""
+    return [(n, h, "codex") for n, h in accounts()] + [(n, h, "claude") for n, h in claude_accounts()]
+
+
+VARS = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR"}
+# kind -> (env var the wrapper passes in, shell variable we set, env var for the pre-auto home, shell var for it)
+AUTO_VARS = {
+    "codex": ("CX_AUTO_ACTIVE", "CX_AUTO_ACTIVE", "CX_PRE_AUTO_HOME", "_CX_PRE_AUTO_HOME"),
+    "claude": ("CX_AUTO_CLAUDE", "CX_AUTO_CLAUDE", "CX_PRE_AUTO_CLAUDE", "_CX_PRE_AUTO_CLAUDE"),
+}
+
+# Variables that outrank (or redirect) a Claude subscription login. See
+# https://code.claude.com/docs/en/authentication#authentication-precedence
+CLAUDE_OVERRIDES = ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN",
+                    "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")
+OFFICIAL_URL = "https://api.anthropic.com"
+
+
+def claude_clean_env(home):
+    """Environment for running `claude` on a subscription account in `home`.
+
+    Strips every inherited provider/auth override so the account's own login is
+    used. A set ANTHROPIC_BASE_URL is pinned to the official endpoint rather
+    than removed: with a local proxy configured, merely unsetting it can still
+    route requests through the proxy.
+    """
+    env = {k: v for k, v in os.environ.items()
+           if not (k.startswith("ANTHROPIC_") or k.startswith("CLAUDE_CODE_USE_")
+                   or k.startswith("CLAUDE_CODE_GATEWAY_") or k == "CLAUDE_CODE_OAUTH_TOKEN")}
+    if "ANTHROPIC_BASE_URL" in os.environ:
+        env["ANTHROPIC_BASE_URL"] = OFFICIAL_URL
+    env["CLAUDE_CONFIG_DIR"] = home
+    return env
+
+
+def claude_status(home):
+    """-> dict from `claude auth status` for the account in `home`, or {"error": ...}."""
+    try:
+        r = subprocess.run(["claude", "auth", "status", "--json"], env=claude_clean_env(home),
+                           capture_output=True, text=True, timeout=20)
+        return json.loads(r.stdout)
+    except FileNotFoundError:
+        return {"error": "claude not found on PATH"}
+    except Exception as e:
+        return {"error": "claude auth status failed: %s" % e}
 
 
 def cwd():
@@ -153,79 +220,92 @@ def short(path):
     return "~" + path[len(HOME):] if path == HOME or path.startswith(HOME + "/") else path
 
 
-def current_account():
-    ch = os.environ.get("CODEX_HOME", "")
+def current_account(kind="codex"):
+    """Name of the account active in this shell for `kind`; 'default'/None when unset, 'custom' if unregistered."""
+    ch = os.environ.get(VARS[kind], "")
     if not ch:
-        return "default"
-    for n, h in accounts():
+        return "default" if kind == "codex" else None
+    for n, h in registry(kind).items():
         if h == ch:
             return n
     return "custom"
 
 
-def binding_for(d):
+def binding_for(d, kind="codex"):
     best_p, best_n = "", ""
+    reg = registry(kind)
     for n, p in read_tsv(BINDING_FILE):
-        if (d == p or d.startswith(p.rstrip("/") + "/")) and len(p) > len(best_p):
+        if n in reg and (d == p or d.startswith(p.rstrip("/") + "/")) and len(p) > len(best_p):
             best_p, best_n = p, n
     return best_n
 
 
 # --------------------------------------------------------------------------
-# Shell state: CODEX_HOME + auto-binding + prompt marker
+# Shell state: CODEX_HOME / CLAUDE_CONFIG_DIR + auto-binding + prompt marker
 # --------------------------------------------------------------------------
 
-def auto_state():
-    return os.environ.get("CX_AUTO_ACTIVE", ""), os.environ.get("CX_PRE_AUTO_HOME", "")
-
-
 class State:
-    """Tracks the shell's CODEX_HOME / auto-binding as this process changes them."""
+    """Tracks the shell's account variables / auto-binding as this process changes them."""
 
     def __init__(self):
-        self.codex_home = os.environ.get("CODEX_HOME", "")
-        self.auto, self.pre = auto_state()
+        self.home = {k: os.environ.get(v, "") for k, v in VARS.items()}
+        self.auto = {k: os.environ.get(AUTO_VARS[k][0], "") for k in VARS}
+        self.pre = {k: os.environ.get(AUTO_VARS[k][2], "") for k in VARS}
 
-    def set_home(self, home):
-        self.codex_home = home or ""
+    def set_home(self, kind, home):
+        self.home[kind] = home or ""
         if home:
-            EMIT.export("CODEX_HOME", home)
+            EMIT.export(VARS[kind], home)
         else:
-            EMIT.unset("CODEX_HOME")
+            EMIT.unset(VARS[kind])
 
-    def set_auto(self, auto, pre):
-        self.auto, self.pre = auto, pre
-        EMIT.setvar("CX_AUTO_ACTIVE", auto)
-        EMIT.setvar("_CX_PRE_AUTO_HOME", pre)
+    def set_auto(self, kind, auto, pre):
+        self.auto[kind], self.pre[kind] = auto, pre
+        EMIT.setvar(AUTO_VARS[kind][1], auto)
+        EMIT.setvar(AUTO_VARS[kind][3], pre)
+
+    def prompt_info(self):
+        """-> (kind, name, text): kind is ''|manual|auto|custom."""
+        parts, kinds, first = [], set(), ""
+        for kind in ("codex", "claude"):
+            home = self.home[kind]
+            if not home:
+                continue
+            reg = registry(kind)
+            name = next((n for n, p in reg.items() if p == home), "")
+            first = first or name
+            if not name:
+                kinds.add("custom")
+                parts.append("%s:custom" % kind)
+            elif self.auto[kind] and reg.get(self.auto[kind]) == home:
+                kinds.add("auto")
+                parts.append("%s:%s:auto" % (kind, name))
+            else:
+                kinds.add("manual")
+                parts.append("%s:%s" % (kind, name))
+        kind = "auto" if "auto" in kinds else "custom" if "custom" in kinds else "manual" if kinds else ""
+        return kind, first, ("[%s]" % " ".join(parts)) if parts else ""
 
     def prompt(self):
         """Emit marker variables the wrappers use for the prompt."""
-        h = homes()
-        name = next((n for n, p in h.items() if p == self.codex_home), "")
-        if not self.codex_home:
-            kind, text = "", ""
-        elif not name:
-            kind, text = "custom", "[codex:custom]"
-        elif self.auto and h.get(self.auto) == self.codex_home:
-            kind, text = "auto", "[codex:%s:auto]" % name
-        else:
-            kind, text = "manual", "[codex:%s]" % name
+        kind, name, text = self.prompt_info()
         EMIT.setvar("CX_PROMPT_KIND", kind)
         EMIT.setvar("CX_PROMPT_NAME", name)
         EMIT.setvar("CX_PROMPT_TEXT", text)
 
 
 def apply_binding(st, pwd):
-    bound = binding_for(pwd)
-    target = homes().get(bound) if bound else None
-    if bound and target:
-        if st.auto != bound:
-            pre = st.codex_home if not st.auto else st.pre
-            st.set_home(target)
-            st.set_auto(bound, pre)
-    elif st.auto:
-        st.set_home(st.pre)
-        st.set_auto("", "")
+    for kind in ("codex", "claude"):
+        bound = binding_for(pwd, kind)
+        target = registry(kind).get(bound) if bound else None
+        if bound and target:
+            if st.auto[kind] != bound:
+                pre = st.home[kind] if not st.auto[kind] else st.pre[kind]
+                st.set_home(kind, target)
+                st.set_auto(kind, bound, pre)
+        elif st.auto[kind]:
+            st.set_home(kind, st.pre[kind])
+            st.set_auto(kind, "", "")
     st.prompt()
 
 
@@ -235,9 +315,18 @@ def apply_binding(st, pwd):
 
 def render(online, verbose):
     color = (sys.stdout.isatty() and not os.environ.get("NO_COLOR")) or os.environ.get("CX_COLOR") == "always"
-    accts = accounts()
-    cur = current_account()
-    auto = os.environ.get("CX_AUTO_ACTIVE", "")
+    all_acc = all_accounts()
+    accts = [(n, h) for n, h, _ in all_acc]
+    kind = {n: k for n, _, k in all_acc}
+    has_claude = any(k == "claude" for k in kind.values())
+    cur = {"codex": current_account("codex"), "claude": current_account("claude")}
+    auto = {"codex": os.environ.get("CX_AUTO_ACTIVE", ""), "claude": os.environ.get("CX_AUTO_CLAUDE", "")}
+
+    def is_cur(n):
+        return cur[kind[n]] == n
+
+    def is_auto(n):
+        return bool(auto[kind[n]]) and auto[kind[n]] == n
 
     def paint(code, s):
         return "\033[%sm%s\033[0m" % (code, s) if color and code else s
@@ -284,11 +373,27 @@ def render(online, verbose):
             r = getattr(e, "reason", e)
             return None, "network error: %s (check proxy)" % (str(r) or type(r).__name__)
 
-    info = {n: load(h) for n, h in accts}
+    def load_claude(home):
+        st = claude_status(home)
+        r = {"email": None, "plan": None, "until": None, "tok": {}, "state": "ok"}
+        if st.get("error"):
+            r["state"], r["email"] = "bad", st["error"]
+        elif not st.get("loggedIn"):
+            r["state"] = "none"
+        else:
+            r["email"] = st.get("email") or st.get("orgName") or "(signed in)"
+            r["plan"] = st.get("subscriptionType")
+        return r
+
+    info = {n: load(h) for n, h in accts if kind[n] == "codex"}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        cfuts = {n: ex.submit(load_claude, h) for n, h in accts if kind[n] == "claude"}
+        info.update({n: f.result() for n, f in cfuts.items()})
     live = {}
     if online:
         with ThreadPoolExecutor(max_workers=8) as ex:
-            futs = {n: ex.submit(fetch, info[n]["tok"]) for n, _ in accts if info[n]["state"] == "ok"}
+            futs = {n: ex.submit(fetch, info[n]["tok"]) for n, _ in accts
+                    if kind[n] == "codex" and info[n]["state"] == "ok"}
             live = {n: f.result() for n, f in futs.items()}
 
     def left(s):
@@ -311,7 +416,7 @@ def render(online, verbose):
         f = math.ceil(p / 100 * n) if p > 0 else 0
         return "▓" * f + "░" * (n - f)
 
-    PLAN = {"pro": "36", "promax": "35", "team": "34", "plus": "32"}
+    PLAN = {"pro": "36", "promax": "35", "max": "35", "team": "34", "enterprise": "34", "plus": "32"}
     stale = [False]
     today = date.today()
 
@@ -344,7 +449,7 @@ def render(online, verbose):
         return i["email"] or {"none": "(not signed in)", "apikey": "API key", "bad": "(unknown)"}.get(i["state"], "?")
 
     def mark(n):
-        return paint("36", "●") if n == cur else paint("33", "◆") if n == auto else " "
+        return paint("36", "●") if is_cur(n) else paint("33", "◆") if is_auto(n) else " "
 
     def table(rows, header):
         widths = [max(len(r[i][0]) for r in [header] + rows) for i in range(len(header))]
@@ -359,7 +464,10 @@ def render(online, verbose):
         return [(c, "2") for c in cols]
 
     def name_cell(n):
-        return (("● " if n == cur else "◆ " if n == auto else "  ") + n, None)
+        return (("● " if is_cur(n) else "◆ " if is_auto(n) else "  ") + n, None)
+
+    def tool_cells(n):
+        return [(kind[n], "2")] if has_claude else []
 
     print()
     if verbose:
@@ -372,7 +480,7 @@ def render(online, verbose):
             print(sep)
             print(" %s %s  %s  %s  %s" % (mark(n), paint("1", "%-10s" % n), who(n),
                   paint(PLAN.get(plan, "2"), plan or "–"), paint(ecode, "exp " + exp) if i["until"] else ""))
-            print("   " + paint("2", short(h)))
+            print("   " + paint("2", short(h) + ("  (claude)" if kind[n] == "claude" else "")))
             if e:
                 print("   " + paint("31", e))
             for lab, p, rs, _ in ws:
@@ -388,7 +496,11 @@ def render(online, verbose):
             d, e, ws = windows(n)
             plan = (d or {}).get("plan_type") or i["plan"]
             exp, ecode = expiry(i["until"])
-            row = [name_cell(n), (plan or "–", PLAN.get(plan, "2"))]
+            row = [name_cell(n)] + tool_cells(n) + [(plan or "–", PLAN.get(plan, "2"))]
+            if kind[n] == "claude" and i["state"] == "ok":
+                row += [("–", "2"), ("–", "2"), ("–", "2"), ("–", "2")]
+                rows.append(row)
+                continue
             if e or i["state"] != "ok":
                 row.append((e or who(n), "31"))
                 rows.append(row)
@@ -400,19 +512,21 @@ def render(online, verbose):
             row.append((left(w7[2]) if w7 else left(w5[2]) if w5 else "–", None))
             row.append((exp, ecode))
             rows.append(row)
-        table(rows, head("  NAME", "PLAN", "5H", "7D", "RESET", "EXPIRES"))
+        table(rows, head(*(["  NAME"] + (["TOOL"] if has_claude else []) + ["PLAN", "5H", "7D", "RESET", "EXPIRES"])))
     else:
         rows = []
         for n, h in accts:
             i = info[n]
             exp, ecode = expiry(i["until"])
-            rows.append([name_cell(n), (who(n), None), (i["plan"] or "–", PLAN.get(i["plan"], "2")), (exp, ecode)])
-        table(rows, head("  NAME", "ACCOUNT", "PLAN", "EXPIRES"))
+            rows.append([name_cell(n)] + tool_cells(n) + [(who(n), None), (i["plan"] or "–", PLAN.get(i["plan"], "2")), (exp, ecode)])
+        table(rows, head(*(["  NAME"] + (["TOOL"] if has_claude else []) + ["ACCOUNT", "PLAN", "EXPIRES"])))
 
     print()
     notes = []
-    if any(n == cur for n, _ in accts) or auto:
+    if any(is_cur(n) or is_auto(n) for n, _ in accts):
         notes.append("● this shell  ◆ auto-bound directory")
+    if online and has_claude:
+        notes.append("usage limits are not available for Claude accounts (plan only)")
     if stale[0]:
         notes.append("⚠ expired or within 7 days (date comes from the cached sign-in token, may be stale)")
     if not online:
@@ -491,42 +605,72 @@ def cmd_ls(args, usage=False):
     return 0
 
 
+def claude_override_warning(home):
+    """Warn when inherited variables would outrank the Claude account we just selected."""
+    present = [v for v in CLAUDE_OVERRIDES if os.environ.get(v)]
+    if os.environ.get("ANTHROPIC_BASE_URL"):
+        present.append("ANTHROPIC_BASE_URL")
+    if present:
+        err("cx: warning: %s %s set in this shell and may override or redirect the account's own login "
+            "(unset them, or use the one-shot form 'cx <name> ...', which cleans them)"
+            % (", ".join(present), "is" if len(present) == 1 else "are"))
+
+
 def cmd_use(args, st):
     name = args[0] if args else ""
-    h = homes()
     if not name or name == "-":
-        st.set_home("")
-        print("codex account: default (%s/.codex)" % HOME)
-    elif name in h:
-        if not os.path.isdir(h[name]):
-            err("cx: directory not found: %s" % h[name])
-            return 1
-        st.set_home("" if name == "default" else h[name])
-        print("this shell -> codex account: %s" % name)
-    else:
-        err("cx: unknown account '%s' (accounts: %s)" % (name, " ".join(h)))
+        st.set_home("codex", "")
+        st.set_home("claude", "")
+        print("codex account: default (%s/.codex); claude: cleared" % HOME)
+        st.prompt()
+        return 0
+    kind = kind_of(name)
+    if kind is None:
+        names = [n for n, _, _ in all_accounts()]
+        err("cx: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
         return 1
+    home = registry(kind)[name]
+    if not os.path.isdir(home):
+        err("cx: directory not found: %s" % home)
+        return 1
+    if kind == "codex":
+        st.set_home("codex", "" if name == "default" else home)
+    else:
+        st.set_home("claude", home)
+        claude_override_warning(home)
+    print("this shell -> %s account: %s" % (kind, name))
     st.prompt()
     return 0
 
 
 def cmd_off(st):
-    st.set_home("")
+    st.set_home("codex", "")
+    st.set_home("claude", "")
     st.prompt()
-    print("cleared CODEX_HOME; back to default account")
+    print("cleared CODEX_HOME and CLAUDE_CONFIG_DIR; back to default accounts")
     return 0
 
 
+def run_claude_login(home):
+    try:
+        return subprocess.call(["claude", "auth", "login", "--claudeai"], env=claude_clean_env(home))
+    except FileNotFoundError:
+        err("cx: claude not found on PATH — install Claude Code first")
+        return 127
+
+
 def cmd_login(args):
-    h = homes()
-    if not args or args[0] not in h:
-        err("cx: usage: cx login <%s>" % "/".join(h))
+    names = [n for n, _, _ in all_accounts()]
+    if not args or kind_of(args[0]) is None:
+        err("cx: usage: cx login <%s>" % "/".join(names))
         return 1
-    return run_codex_login(h[args[0]])
+    kind = kind_of(args[0])
+    home = registry(kind)[args[0]]
+    return run_claude_login(home) if kind == "claude" else run_codex_login(home)
 
 
 def cmd_add(args):
-    name, home_override, do_login, device = "", "", True, False
+    name, home_override, do_login, device, claude = "", "", True, False, False
     i = 0
     while i < len(args):
         a = args[i]
@@ -541,6 +685,8 @@ def cmd_add(args):
             do_login = False
         elif a == "--device-auth":
             device = True
+        elif a == "--claude":
+            claude = True
         elif a.startswith("-"):
             err("cx add: unknown flag %s" % a)
             return 1
@@ -551,29 +697,46 @@ def cmd_add(args):
             return 1
         i += 1
     if not name:
-        err("usage: cx add <name> [--home DIR] [--no-login] [--device-auth]")
+        err("usage: cx add <name> [--claude] [--home DIR] [--no-login] [--device-auth]")
+        return 1
+    if claude and device:
+        err("cx add: --device-auth is Codex-only (Claude Code signs in through the browser)")
         return 1
     if not valid_name(name):
         err("cx: name must match [A-Za-z0-9_-] and not collide with a command: %s" % name)
         return 1
-    h = homes()
-    if name in h:
-        err("cx: account '%s' already exists: %s" % (name, h[name]))
+    existing = kind_of(name)
+    if existing:
+        err("cx: account '%s' already exists (%s): %s" % (name, existing, registry(existing)[name]))
         return 1
-    home = os.path.expanduser(home_override) if home_override else os.path.join(HOME, ".codex-%s" % name)
-    for k, p in h.items():
+    if home_override:
+        home = os.path.abspath(os.path.expanduser(home_override))
+    else:
+        home = os.path.join(HOME, (".claude-%s" if claude else ".codex-%s") % name)
+    for n, p, k in all_accounts():
         if p == home:
-            err("cx: directory already registered as account '%s': %s" % (k, home))
+            err("cx: directory already registered as account '%s': %s" % (n, home))
             return 1
     os.makedirs(home, exist_ok=True)
-    if do_login and not os.path.isfile(os.path.join(home, "auth.json")):
-        print("Complete the sign-in in your browser (account: %s)..." % name)
-        if run_codex_login(home, device) != 0:
-            err("cx: login failed; account not registered (directory kept: %s)" % home)
-            return 1
-    write_tsv(ACCOUNT_FILE, accounts() + [(name, home)])
-    print("added account: %s -> %s" % (name, home))
-    if not do_login:
+    if claude:
+        signed_in = claude_status(home).get("loggedIn")
+        if do_login and not signed_in:
+            print("Complete the sign-in in your browser (Claude account: %s)..." % name)
+            if run_claude_login(home) != 0:
+                err("cx: login failed; account not registered (directory kept: %s)" % home)
+                return 1
+        write_tsv(CLAUDE_FILE, claude_accounts() + [(name, home)])
+    else:
+        if do_login and not os.path.isfile(os.path.join(home, "auth.json")):
+            print("Complete the sign-in in your browser (account: %s)..." % name)
+            if run_codex_login(home, device) != 0:
+                err("cx: login failed; account not registered (directory kept: %s)" % home)
+                return 1
+        write_tsv(ACCOUNT_FILE, accounts() + [(name, home)])
+    print("added %saccount: %s -> %s" % ("claude " if claude else "", name, home))
+    signed_in = (claude_status(home).get("loggedIn") if claude
+                 else os.path.isfile(os.path.join(home, "auth.json")))
+    if not signed_in:
         print("not signed in yet: run  cx login %s" % name)
     return 0
 
@@ -587,15 +750,17 @@ def cmd_rm(args):
     if name == "default":
         err("cx: default is built-in and cannot be removed")
         return 1
-    h = homes()
-    if name not in h:
-        err("cx: unknown account '%s' (accounts: %s)" % (name, " ".join(h)))
+    kind = kind_of(name)
+    if kind is None:
+        names = [n for n, _, _ in all_accounts()]
+        err("cx: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
         return 1
-    home = h[name]
-    if home == os.environ.get("CODEX_HOME", ""):
+    home = registry(kind)[name]
+    if home == os.environ.get(VARS[kind], ""):
         err("cx: '%s' is active in this shell; run 'cx use -' first" % name)
         return 1
-    write_tsv(ACCOUNT_FILE, [(n, p) for n, p in accounts() if n != name])
+    reg_file = CLAUDE_FILE if kind == "claude" else ACCOUNT_FILE
+    write_tsv(reg_file, [(n, p) for n, p in read_tsv(reg_file) if n != name])
     if os.path.exists(BINDING_FILE):
         write_tsv(BINDING_FILE, [(n, p) for n, p in read_tsv(BINDING_FILE) if n != name])
     print("removed account from registry: %s" % name)
@@ -614,17 +779,22 @@ def cmd_bind(args, st):
     name = args[0] if args else ""
     d = cwd()
     if not name:
-        if not st.codex_home:
+        active = [k for k in ("codex", "claude") if st.home[k]]
+        if not active:
             err("cx: currently on default; use 'cx bind <name>' or 'cx use <name>' first")
             return 1
-        name = current_account()
-    h = homes()
-    if name not in h:
-        err("cx: unknown account '%s' (accounts: %s)" % (name, " ".join(h)))
+        if len(active) > 1:
+            err("cx: both a codex and a claude account are active; name one: cx bind <name>")
+            return 1
+        name = current_account(active[0])
+    kind = kind_of(name)
+    if kind is None:
+        names = [n for n, _, _ in all_accounts()]
+        err("cx: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
         return 1
     rows, existed = [], False
     for n, p in read_tsv(BINDING_FILE):
-        if p == d:
+        if p == d and kind_of(n) == kind:
             existed = True
             rows.append((name, d))
         else:
@@ -634,7 +804,7 @@ def cmd_bind(args, st):
     write_tsv(BINDING_FILE, rows)
     print("bound: %s -> %s (auto-switch in this directory and subdirectories)" % (d, name))
     if existed:
-        print("(replaced previous binding for this directory)")
+        print("(replaced previous %s binding for this directory)" % kind)
     apply_binding(st, d)
     return 0
 
@@ -661,24 +831,28 @@ def cmd_binds():
         print("(no project bindings yet — run 'cx bind <name>' inside a project directory)")
         return 0
     pwd = cwd()
-    cur = binding_for(pwd)
+    here = {binding_for(pwd, k) for k in ("codex", "claude")} - {""}
     print(" account       project directory (* active here)")
     for n, p in rows:
-        active = n == cur and (pwd == p or pwd.startswith(p.rstrip("/") + "/"))
-        print(" %s%-12s %s" % ("* " if active else "  ", n, p))
+        active = n in here and (pwd == p or pwd.startswith(p.rstrip("/") + "/"))
+        tag = "  (claude)" if kind_of(n) == "claude" else ""
+        print(" %s%-12s %s%s" % ("* " if active else "  ", n, p, tag))
     return 0
 
 
 HELP = """  cx                         list accounts, emails, plan and subscription expiry
   cx setup                   interactive first-run wizard (adopt homes, sign in, add, bind)
   cx usage [-v]              live limits (5h/7d bars); -v = detailed blocks (also: cx ls -v)
-  cx use <name>              switch this shell to <name>
+  cx use <name>              switch this shell to <name> (sets CODEX_HOME or CLAUDE_CONFIG_DIR)
   cx use -                   switch this shell back to default
-  cx <name> [codex args]     one-shot invocation, e.g.  cx work exec "..."
+  cx <name> [args]           one-shot: runs codex (or claude, for a Claude account)
+                             under that account, e.g.  cx work exec "..."
   cx login <name>            run codex login for one account
   cx off                     clear the switch
-  cx add <name>              create an account (new CODEX_HOME + sign-in)
+  cx add <name>              create a Codex account (new CODEX_HOME + sign-in)
       [--home DIR] [--no-login] [--device-auth]
+  cx add --claude <name>     create a Claude Code subscription account
+      (own CLAUDE_CONFIG_DIR ~/.claude-<name>; sign-in via claude auth login)
   cx rm <name> [--purge]     unregister (keeps data unless confirmed/--purge)
   cx bind [name]             bind current directory (default: current account)
   cx unbind [dir]            remove a directory binding (default: current dir)
@@ -794,23 +968,24 @@ def main(argv):
     elif sub in ("help", "-h", "--help"):
         rc = cmd_help()
     elif sub == "prompt":
-        h = homes()
-        name = next((n for n, p in h.items() if p == st.codex_home), "")
-        if st.codex_home:
-            print("[codex:%s%s]" % (name or "custom", ":auto" if st.auto and h.get(st.auto) == st.codex_home else ""))
+        print(st.prompt_info()[2])
     elif sub == "apply":
         apply_binding(st, rest[0] if rest else cwd())
     elif sub == "names":
-        print("\n".join(n for n, _ in accounts()))
+        print("\n".join(n for n, _, _ in all_accounts()))
     else:
-        h = homes()
-        if sub in h:
-            env = dict(os.environ, CODEX_HOME=h[sub])
+        kind = kind_of(sub)
+        if kind:
+            home = registry(kind)[sub]
             EMIT.flush()
+            if kind == "claude":
+                env, argv = claude_clean_env(home), ["claude"] + rest
+            else:
+                env, argv = dict(os.environ, CODEX_HOME=home), ["codex"] + rest
             try:
-                os.execvpe("codex", ["codex"] + rest, env)
+                os.execvpe(argv[0], argv, env)
             except FileNotFoundError:
-                err("cx: codex not found on PATH")
+                err("cx: %s not found on PATH" % argv[0])
                 return 127
         err("cx: unknown command/account '%s' (cx help)" % sub)
         rc = 1
