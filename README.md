@@ -15,10 +15,18 @@ switch automatically on `cd`.
 
 ```text
 $ zorua usage
+ Codex
    NAME     PLAN    5H           7D           RESET  EXPIRES
  ● default  pro     –            ▓░░░░░   6%  4d9h   2026-11-02
    work     promax  –            ░░░░░░   0%  7d     2026-11-07
    side     team    ░░░░░░   0%  ▓▓░░░░  26%  1d15h  2026-10-17
+
+ Claude Code
+   NAME  PLAN  5H           7D           RESET
+   alt   max   ▓▓▓░░░  42%  ▓░░░░░   7%  4d9h
+
+ ● this shell  ◆ auto-bound directory
+ alt: Claude usage as of 3m ago (from its last session)
 ```
 
 `zorua usage -v` expands each account into a block with its home directory,
