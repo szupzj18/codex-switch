@@ -500,60 +500,71 @@ def render(online, verbose):
     def name_cell(n):
         return (("● " if is_cur(n) else "◆ " if is_auto(n) else "  ") + n, None)
 
-    def tool_cells(n):
-        return [(kind[n], "2")] if has_claude else []
+    TITLES = {"codex": "Codex", "claude": "Claude Code"}
+    groups = [(k, [(n, h) for n, h in accts if kind[n] == k]) for k in ("codex", "claude")]
+    groups = [(k, g) for k, g in groups if g]
+    titled = len(groups) > 1          # headings only when both agents are present
+
+    def heading(k):
+        if titled:
+            print(" " + paint("1", TITLES[k]))
 
     print()
-    if verbose:
-        sep = paint("2", " " + "─" * 58)
-        for n, h in accts:
-            i = info[n]
-            d, e, ws = windows(n)
-            plan = (d or {}).get("plan_type") or i["plan"]
-            exp, ecode = expiry(i["until"])
+    for gi, (k, group) in enumerate(groups):
+        if gi:
+            print()
+        heading(k)
+        has_exp = k == "codex"        # Claude subscription expiry is not exposed
+        if verbose:
+            sep = paint("2", " " + "─" * 58)
+            for n, h in group:
+                i = info[n]
+                d, e, ws = windows(n)
+                plan = (d or {}).get("plan_type") or i["plan"]
+                exp, ecode = expiry(i["until"])
+                print(sep)
+                print(" %s %s  %s  %s  %s" % (mark(n), paint("1", "%-10s" % n), who(n),
+                      paint(PLAN.get(plan, "2"), plan or "–"), paint(ecode, "exp " + exp) if i["until"] else ""))
+                print("   " + paint("2", short(h)))
+                if e:
+                    print("   " + paint("31", e))
+                for lab, p, rs, _ in ws:
+                    print("   %-3s %s %3d%%   %s" % (lab.lower(), bar(p, 20), p, paint("2", "resets in " + left(rs))))
+                c = (d or {}).get("credits") or {}
+                if c.get("has_credits") and c.get("balance"):
+                    print("   " + paint("2", "credits %s" % format(int(float(c["balance"])), ",")))
             print(sep)
-            print(" %s %s  %s  %s  %s" % (mark(n), paint("1", "%-10s" % n), who(n),
-                  paint(PLAN.get(plan, "2"), plan or "–"), paint(ecode, "exp " + exp) if i["until"] else ""))
-            print("   " + paint("2", short(h) + ("  (claude)" if kind[n] == "claude" else "")))
-            if e:
-                print("   " + paint("31", e))
-            for lab, p, rs, _ in ws:
-                print("   %-3s %s %3d%%   %s" % (lab.lower(), bar(p, 20), p, paint("2", "resets in " + left(rs))))
-            c = (d or {}).get("credits") or {}
-            if c.get("has_credits") and c.get("balance"):
-                print("   " + paint("2", "credits %s" % format(int(float(c["balance"])), ",")))
-        print(sep)
-    elif online:
-        rows = []
-        for n, h in accts:
-            i = info[n]
-            d, e, ws = windows(n)
-            plan = (d or {}).get("plan_type") or i["plan"]
-            exp, ecode = expiry(i["until"])
-            row = [name_cell(n)] + tool_cells(n) + [(plan or "–", PLAN.get(plan, "2"))]
-            if kind[n] == "claude" and i["state"] == "ok" and not ws:
-                row += [("–", "2"), ("–", "2"), ("–", "2"), ("–", "2")]
-                rows.append(row)
-                continue
-            if e or i["state"] != "ok":
-                row.append((e or who(n), "31"))
-                rows.append(row)
-                continue
-            w5 = next((w for w in ws if w[3] < 86400), None)
-            w7 = next((w for w in ws if w[3] >= 86400), None)
-            for w in (w5, w7):
-                row.append(("%s %3d%%" % (plain_bar(w[1], 6), w[1]), pct_code(w[1])) if w else ("–", "2"))
-            row.append((left(w7[2]) if w7 else left(w5[2]) if w5 else "–", None))
-            row.append((exp, ecode))
-            rows.append(row)
-        table(rows, head(*(["  NAME"] + (["TOOL"] if has_claude else []) + ["PLAN", "5H", "7D", "RESET", "EXPIRES"])))
-    else:
-        rows = []
-        for n, h in accts:
-            i = info[n]
-            exp, ecode = expiry(i["until"])
-            rows.append([name_cell(n)] + tool_cells(n) + [(who(n), None), (i["plan"] or "–", PLAN.get(i["plan"], "2")), (exp, ecode)])
-        table(rows, head(*(["  NAME"] + (["TOOL"] if has_claude else []) + ["ACCOUNT", "PLAN", "EXPIRES"])))
+        elif online:
+            rows = []
+            for n, h in group:
+                i = info[n]
+                d, e, ws = windows(n)
+                plan = (d or {}).get("plan_type") or i["plan"]
+                exp, ecode = expiry(i["until"])
+                tail = [(exp, ecode)] if has_exp else []
+                row = [name_cell(n), (plan or "–", PLAN.get(plan, "2"))]
+                if k == "claude" and i["state"] == "ok" and not ws:
+                    rows.append(row + [("–", "2")] * 3)
+                    continue
+                if e or i["state"] != "ok":
+                    row.append((e or who(n), "31"))
+                    rows.append(row)
+                    continue
+                w5 = next((w for w in ws if w[3] < 86400), None)
+                w7 = next((w for w in ws if w[3] >= 86400), None)
+                for w in (w5, w7):
+                    row.append(("%s %3d%%" % (plain_bar(w[1], 6), w[1]), pct_code(w[1])) if w else ("–", "2"))
+                row.append((left(w7[2]) if w7 else left(w5[2]) if w5 else "–", None))
+                rows.append(row + tail)
+            table(rows, head(*(["  NAME", "PLAN", "5H", "7D", "RESET"] + (["EXPIRES"] if has_exp else []))))
+        else:
+            rows = []
+            for n, h in group:
+                i = info[n]
+                exp, ecode = expiry(i["until"])
+                row = [name_cell(n), (who(n), None), (i["plan"] or "–", PLAN.get(i["plan"], "2"))]
+                rows.append(row + ([(exp, ecode)] if has_exp else []))
+            table(rows, head(*(["  NAME", "ACCOUNT", "PLAN"] + (["EXPIRES"] if has_exp else []))))
 
     print()
     notes = []

@@ -32,7 +32,7 @@ cx add --claude alt              # creates ~/.claude-alt, runs `claude auth logi
 cx use alt                       # sets CLAUDE_CONFIG_DIR for this shell only
 cx alt -p "hello"                # one-shot: runs claude under that account
 cx bind alt                      # auto-switch for this directory, like Codex accounts
-cx                               # TOOL column tells codex and claude accounts apart
+cx                               # accounts are listed in a "Codex" and a "Claude Code" section
 ```
 
 Codex and Claude accounts share one namespace, so `cx work` always means one
