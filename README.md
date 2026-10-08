@@ -125,6 +125,16 @@ cd zorua && sh install.sh
 
 Open a new terminal and run `zorua help`.
 
+To install a specific release instead of `main`, pin it with `ZORUA_REF`:
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/install.sh | ZORUA_REF=v0.5.0 sh
+```
+
+Each [release](https://github.com/szupzj18/zorua/releases) also ships a tarball
+(`zorua-<version>.tar.gz`, usable with `sh install.sh` after extracting it) and a
+`SHA256SUMS` file.
+
 The installer copies the program to `~/.zorua` and adds one `source`
 block for each shell it finds: `~/.zshrc`, `~/.bashrc`, and
 `~/.config/fish/conf.d/zorua.fish`. Upgrading from the zsh-only 0.1
@@ -286,6 +296,18 @@ on `PATH`), checks the message shown when python3 is missing, and verifies
 CI (`.github/workflows/smoke.yml`) runs every suite for each push and pull
 request (Python 3.8 and 3.12); the install E2E runs inside an `ubuntu:24.04`
 container.
+
+## Releasing
+
+Releases are cut by pushing a tag; `.github/workflows/release.yml` does the rest:
+
+1. Bump `VERSION` in `zorua_core.py` and merge it to `main` through a PR.
+2. `git tag v0.5.0 && git push origin v0.5.0` on that commit. Tags with a suffix
+   such as `v0.6.0-rc1` are published as pre-releases.
+3. The workflow runs the full test suite (zsh, bash, fish, Python 3.8 and 3.12, install
+   E2E), fails if the tag does not match `VERSION`, builds the tarball and
+   `SHA256SUMS`, checks that the tarball installs and prints the right version, then
+   creates the GitHub Release with generated notes and attaches `install.sh`.
 
 ## Uninstall
 

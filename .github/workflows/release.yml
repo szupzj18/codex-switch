@@ -1,0 +1,65 @@
+name: Release
+
+# Push a tag like v0.5.0 to publish a GitHub Release. The tag must match
+# VERSION in zorua_core.py. Tags containing "-" (v0.6.0-rc1) are marked as
+# pre-releases.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+jobs:
+  ci:
+    name: tests
+    uses: ./.github/workflows/smoke.yml
+
+  release:
+    name: publish release
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the tag matches the code version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver=$(sed -n 's/^VERSION = "\(.*\)"$/\1/p' zorua_core.py)
+          core="${tag%%-*}"
+          if [ -z "$ver" ] || [ "$ver" != "$core" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match VERSION \"$ver\" in zorua_core.py"
+            exit 1
+          fi
+          echo "VERSION=$tag" >> "$GITHUB_ENV"
+
+      - name: Build the release files
+        run: |
+          name="zorua-$VERSION"
+          mkdir -p "dist/$name"
+          cp zorua_core.py zorua_statusline.py zorua.zsh zorua.bash zorua.fish \
+             install.sh uninstall.sh LICENSE README.md "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          cp install.sh dist/install.sh
+          rm -rf "dist/$name"
+          (cd dist && sha256sum "$name.tar.gz" install.sh > SHA256SUMS && cat SHA256SUMS)
+
+      - name: Check that the tarball installs and runs
+        run: |
+          tmp="$(mktemp -d)"
+          tar -xzf "dist/zorua-$VERSION.tar.gz" -C "$tmp"
+          mkdir -p "$tmp/home"
+          (cd "$tmp/zorua-$VERSION" && HOME="$tmp/home" sh install.sh)
+          out="$(HOME="$tmp/home" python3 "$tmp/home/.zorua/zorua_core.py" version)"
+          echo "$out"
+          [ "$out" = "Zorua ${VERSION%%-*}" ]
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          case "$VERSION" in *-*) flags="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS dist/install.sh \
+            --title "Zorua $VERSION" $flags --generate-notes \
+            --notes "Install: \`curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/install.sh | ZORUA_REF=${GITHUB_REF_NAME} sh\`  
+          Pinned install from this tag: \`ZORUA_REF=${GITHUB_REF_NAME} sh install.sh\`. Verify downloads with \`SHA256SUMS\`."
