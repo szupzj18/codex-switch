@@ -1,6 +1,11 @@
-# CodeX Switch
+# Zorua
 
 **Parallel multi-account manager for the OpenAI Codex CLI and Claude Code — zsh, bash and fish.**
+
+> Zorua was called *CodeX Switch* (`codex-switch`) before 0.4.0. The command is still `cx`.
+> To upgrade, run the installer again: it replaces the old `~/.zshrc`/`~/.bashrc` block,
+> copies your accounts and bindings from `~/.config/codex-switch` (the old files are kept
+> as a backup) and refreshes the usage relay of Claude accounts. See *Migrating* below.
 
 Each account gets its own `CODEX_HOME` — separate sign-in, sessions, config
 and usage quota. Accounts work **in parallel**: one account per terminal
@@ -87,7 +92,7 @@ Two design styles exist in the wild:
 | Global switch (swap `auth.json`) | One active account machine-wide; restart clients after switching | No — every window flips |
 | **`CODEX_HOME` isolation (this tool)** | One home directory per account; shell selects one | **Yes — different accounts per terminal** |
 
-CodeX Switch is one small Python program (standard library only) plus a thin
+Zorua is one small Python program (standard library only) plus a thin
 layer for each shell: no wrapper around the
 `codex` binary, no daemon, no proxy.
 
@@ -100,21 +105,21 @@ layer for each shell: no wrapper around the
 ## Install
 
 ```shell
-curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/install.sh | sh
 ```
 
 Or clone and install locally:
 
 ```shell
-git clone https://github.com/szupzj18/codex-switch.git
-cd codex-switch && sh install.sh
+git clone https://github.com/szupzj18/zorua.git
+cd zorua && sh install.sh
 ```
 
 Open a new terminal and run `cx help`.
 
-The installer copies the program to `~/.codex-switch` and adds one `source`
+The installer copies the program to `~/.zorua` and adds one `source`
 block for each shell it finds: `~/.zshrc`, `~/.bashrc`, and
-`~/.config/fish/conf.d/codex-switch.fish`. Upgrading from the zsh-only 0.1
+`~/.config/fish/conf.d/zorua.fish`. Upgrading from the zsh-only 0.1
 needs nothing else: the same `source` line keeps working. Uninstall with
 `sh uninstall.sh` (account data is never
 deleted).
@@ -190,7 +195,7 @@ directory binding).
 ## For AI agents
 
 An agent-readable summary (commands, non-interactive usage, files, caveats) is
-served at <https://szupzj18.github.io/codex-switch/llms.txt>.
+served at <https://szupzj18.github.io/zorua/llms.txt>.
 
 ## Shell support
 
@@ -227,12 +232,12 @@ A 2x2 grid with four accounts signed in at once works naturally.
 ## Files
 
 ```text
-~/.config/codex-switch/accounts.tsv    registered accounts   <name>\t<codex home>
-~/.config/codex-switch/claude-accounts.tsv  Claude Code accounts <name>\t<config dir>
-~/.config/codex-switch/bindings.tsv    project bindings      <name>\t<project path>
-~/.codex-switch/cx_core.py                  the program
-~/.codex-switch/codex-switch.{zsh,bash,fish}  per-shell wrappers
-~/.codex/  ~/.codex-<name>/        per-account Codex homes (untouched by CodeX Switch)
+~/.config/zorua/accounts.tsv    registered accounts   <name>\t<codex home>
+~/.config/zorua/claude-accounts.tsv  Claude Code accounts <name>\t<config dir>
+~/.config/zorua/bindings.tsv    project bindings      <name>\t<project path>
+~/.zorua/cx_core.py                  the program
+~/.zorua/zorua.{zsh,bash,fish}  per-shell wrappers
+~/.codex/  ~/.codex-<name>/        per-account Codex homes (untouched by Zorua)
 ```
 
 Override the registry location with `CX_CONFIG_DIR`.
@@ -247,7 +252,7 @@ On first run, `default` (`~/.codex`) is seeded automatically and existing
 - This tool never modifies anything inside the account homes — it only sets
   `CODEX_HOME` for the shell and tracks two small TSV files.
 - VS Code extension and the Codex desktop app do not read `CODEX_HOME`;
-  CodeX Switch manages the CLI only.
+  Zorua manages the CLI only.
 
 ## Development
 
@@ -278,12 +283,28 @@ container.
 
 ```shell
 sh uninstall.sh          # remove the rc source blocks
-sh uninstall.sh --purge  # also remove ~/.codex-switch
+sh uninstall.sh --purge  # also remove ~/.zorua
 ```
 
-Account homes and `~/.config/codex-switch` are kept; delete them yourself if
+Account homes and `~/.config/zorua` are kept; delete them yourself if
 desired.
+
+## Migrating from CodeX Switch
+
+Run the installer once (`curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/install.sh | sh`).
+It removes the old `# >>> codex-switch >>>` block from `~/.zshrc` / `~/.bashrc` (and
+`conf.d/codex-switch.fish`), installs into `~/.zorua`, copies the registry to
+`~/.config/zorua` and points Claude accounts' usage relay at the new location.
+Nothing inside your account homes changes. Afterwards you may delete `~/.codex-switch`
+and `~/.config/codex-switch`. The old GitHub address redirects to this repository.
 
 ## License
 
 [MIT](LICENSE)
+
+---
+
+Zorua is an independent project. The name is a nod to the Pokémon of the same name
+(an illusion fox that takes on other forms); it is not affiliated with or endorsed by
+Nintendo, Game Freak, Creatures or The Pokémon Company. Codex is a product of OpenAI and
+Claude Code of Anthropic; this tool is not affiliated with either.

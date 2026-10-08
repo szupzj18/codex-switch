@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CodeX Switch — Codex CLI, many accounts</title>
+<title>Zorua — many accounts, one terminal each</title>
 <link rel="alternate" type="text/plain" href="llms.txt" title="Agent-readable description">
 <meta name="description" content="Run different Codex CLI and Claude Code accounts in different terminals at the same time. One small Python program, works in zsh, bash and fish. No daemon.">
 <style>
@@ -41,12 +41,12 @@ footer{margin-top:56px;color:var(--dim);font-size:.82rem}
 </head>
 <body>
 <main>
-  <div class="tag">$ codex-switch --version 0.1.0</div>
-  <h1>Many Codex accounts.<br><span>One terminal each.</span></h1>
-  <p>Works in zsh, bash and fish. Every account gets its own <code>CODEX_HOME</code>, so four panes can run four sign-ins at once. No daemon, no proxy, nothing to restart.</p>
+  <div class="tag">$ cx version → Zorua 0.4.0</div>
+  <h1>Many accounts.<br><span>One terminal each.</span></h1>
+  <p>Zorua keeps your Codex CLI and Claude Code accounts apart. Works in zsh, bash and fish. Every account gets its own <code>CODEX_HOME</code> or <code>CLAUDE_CONFIG_DIR</code>, so four panes can run four sign-ins at once. No daemon, no proxy, nothing to restart.</p>
 
-  <div class="cta"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | sh</code><button id="copy" type="button">copy</button></div>
-  <p><a href="https://github.com/szupzj18/codex-switch">github.com/szupzj18/codex-switch</a> · <a href="llms.txt">llms.txt</a> <span style="opacity:.6">(for agents)</span></p>
+  <div class="cta"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/install.sh | sh</code><button id="copy" type="button">copy</button></div>
+  <p><a href="https://github.com/szupzj18/zorua">github.com/szupzj18/zorua</a> · <a href="llms.txt">llms.txt</a> <span style="opacity:.6">(for agents)</span></p>
 
   <h2>global switch vs. cx</h2>
   <div class="vs">
@@ -55,7 +55,7 @@ footer{margin-top:56px;color:var(--dim);font-size:.82rem}
 window 2  work  <span class="r">→ side</span>
 window 3  work  <span class="r">→ side</span></pre>
 <p>One active account machine-wide. Switch in one window and the rest silently follow.</p></div>
-    <div class="term good"><div class="bar"><i></i><i></i><i></i><b class="g">codex-switch (CODEX_HOME per shell)</b></div>
+    <div class="term good"><div class="bar"><i></i><i></i><i></i><b class="g">Zorua (config dir per shell)</b></div>
 <pre>window 1  <span class="g">work</span>
 window 2  <span class="g">side</span>
 window 3  <span class="g">client-acme</span></pre>
@@ -105,7 +105,7 @@ window 3  <span class="g">client-acme</span></pre>
 <span class="g">$</span> cx work exec "explain this repo"
 <span class="g">$</span> cx bind work         <span class="d"># auto-switch in this directory</span></pre></div>
 
-  <footer>MIT · zsh, bash or fish · Python 3.8+ · requires the official Codex CLI · <code>cx usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
+  <footer>Formerly CodeX Switch · MIT · zsh, bash or fish · Python 3.8+ · requires the official Codex CLI · <code>cx usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
 </main>
 <script>
 document.getElementById('copy').addEventListener('click',function(e){var b=e.currentTarget;navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1500)}).catch(function(){})});

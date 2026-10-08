@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CodeX Switch smoke test for the bash wrapper — runs inside a temporary HOME.
+# Zorua smoke test for the bash wrapper — runs inside a temporary HOME.
 #
 #   bash tests/smoke.bash
 set -eu
@@ -31,7 +31,7 @@ mkdir -p "$HOME/.codex-work"
 printf '{"tokens":{"id_token":"%s"}}' "$(mkjwt work@example.com)" > "$HOME/.codex-work/auth.json"
 
 # bash is non-interactive here, so install the hook by hand afterwards
-source "$ROOT/codex-switch.bash"
+source "$ROOT/zorua.bash"
 
 out=$(cx ls)
 contains "$out" "work@example.com" "discovers signed-in home"
@@ -42,7 +42,7 @@ contains "$(cx ls -v)" "~/.codex-work" "verbose view"
 not_contains "$out" "Claude Code" "no section headings while only codex accounts exist"
 ok "first run + ls"
 
-contains "$(cx version)" "CodeX Switch" "version"
+contains "$(cx version)" "Zorua" "version"
 ok "version"
 
 SIDE="$TMP/side-home"; mkdir "$SIDE"
@@ -104,7 +104,7 @@ OLDPATH=$PATH
 export PATH="$TMP/cbin:$PATH"
 
 cx add --claude alt >/dev/null
-[ -f "$XDG_CONFIG_HOME/codex-switch/claude-accounts.tsv" ] || die "claude registry not written"
+[ -f "$XDG_CONFIG_HOME/zorua/claude-accounts.tsv" ] || die "claude registry not written"
 out=$(cx ls)
 contains "$out" "claude@example.com" "claude account email from claude auth status"
 contains "$out" "max" "claude plan"
@@ -232,7 +232,7 @@ cx rm u3 --purge >/dev/null
 rm -rf "$INST"
 
 # uninstall.sh: note without --purge, restore with --purge
-INST="$HOME/.codex-switch"; mkdir -p "$INST"
+INST="$HOME/.zorua"; mkdir -p "$INST"
 cp "$ROOT/cx_core.py" "$ROOT/cx_statusline.py" "$INST/"
 cx add --claude u4 >/dev/null
 U4="$HOME/.claude-u4"
@@ -248,11 +248,22 @@ cx rm u4 --purge >/dev/null
 export PATH=$OLDPATH
 ok "hook install / remove restores the original status line"
 
+
+# ---- migration from the old codex-switch name --------------------------------
+OLDCFG="$TMP/mig/config"; mkdir -p "$OLDCFG/codex-switch" "$TMP/mig/home/.codex-legacy"
+printf 'default\t%s\nlegacy\t%s\n' "$TMP/mig/home/.codex" "$TMP/mig/home/.codex-legacy" > "$OLDCFG/codex-switch/accounts.tsv"
+printf 'legacy\t%s\n' "$TMP/mig/proj" > "$OLDCFG/codex-switch/bindings.tsv"
+out=$(HOME="$TMP/mig/home" XDG_CONFIG_HOME="$OLDCFG" python3 "$ROOT/cx_core.py" ls)
+contains "$out" "legacy" "accounts carried over from the old config dir"
+[ -f "$OLDCFG/zorua/bindings.tsv" ] || die "bindings not carried over"
+[ -f "$OLDCFG/codex-switch/accounts.tsv" ] || die "old config must be kept as a backup"
+ok "registry migrated from ~/.config/codex-switch"
+
 mkdir -p "$HOME/.codex-adopt"
 printf '{"tokens":{"id_token":"%s"}}' "$(mkjwt adopt@example.com)" > "$HOME/.codex-adopt/auth.json"
 out=$(printf 'y\nn\nn\nn\n' | PATH="$TMP/bin:$PATH" cx setup 2>&1)
-contains "$out" "CodeX Switch setup" "setup banner"
-contains "$(cat "$XDG_CONFIG_HOME/codex-switch/accounts.tsv")" "adopt" "setup registers"
+contains "$out" "Zorua setup" "setup banner"
+contains "$(cat "$XDG_CONFIG_HOME/zorua/accounts.tsv")" "adopt" "setup registers"
 cx setup </dev/null >/dev/null 2>&1 || die "setup must survive EOF"
 ok "setup wizard"
 

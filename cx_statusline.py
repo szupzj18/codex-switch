@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CodeX Switch status-line relay for Claude Code.
+"""Zorua status-line relay for Claude Code.
 
 Claude Code feeds the status-line command a JSON document on stdin. For claude.ai
 Pro/Max accounts it contains `rate_limits.five_hour` / `seven_day` (documented:

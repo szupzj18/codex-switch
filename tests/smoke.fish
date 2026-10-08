@@ -1,5 +1,5 @@
 #!/usr/bin/env fish
-# CodeX Switch smoke test for the fish wrapper — runs inside a temporary HOME.
+# Zorua smoke test for the fish wrapper — runs inside a temporary HOME.
 #
 #   fish tests/smoke.fish
 
@@ -34,14 +34,14 @@ print(b({"alg": "none"}) + "." + b(claims) + ".sig")')
 mkdir -p $HOME/.codex-work
 printf '{"tokens":{"id_token":"%s"}}' $jwt > $HOME/.codex-work/auth.json
 
-source $root/codex-switch.fish
+source $root/zorua.fish
 
 set -l out (cx ls | string collect)
 contains_str $out work@example.com "discovers signed-in home"
 contains_str $out 2030-01-02 "expiry column"
 ok "first run + ls"
 
-contains_str (cx version | string collect) "CodeX Switch" version
+contains_str (cx version | string collect) "Zorua" version
 ok version
 
 set -l side $tmp/side-home
@@ -82,7 +82,7 @@ ok "rm / --purge"
 mkdir $tmp/bin
 printf '#!/bin/sh\necho "FAKE_HOME=$CODEX_HOME"\necho "ARGS=$*"\n' > $tmp/bin/codex
 chmod +x $tmp/bin/codex
-set -l one (begin; set -lx PATH $tmp/bin $PATH; fish -c "source $root/codex-switch.fish; cx work hello-world"; end | string collect)
+set -l one (begin; set -lx PATH $tmp/bin $PATH; fish -c "source $root/zorua.fish; cx work hello-world"; end | string collect)
 contains_str $one "FAKE_HOME=$HOME/.codex-work" "one-shot home"
 contains_str $one "ARGS=hello-world" "one-shot args"
 ok one-shot

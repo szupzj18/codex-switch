@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# CodeX Switch install-time end-to-end test.
+# Zorua install-time end-to-end test.
 #
 # Runs as ROOT inside a bare Linux container (ubuntu:24.04 + zsh), creates a
 # fresh unprivileged user, and exercises the full user journey that unit-ish
@@ -40,21 +40,21 @@ step "1. installer writes zshrc block as a non-root user"
 inst=$(su "$E2E_USER" -s "$ZSH_BIN" -c "sh $SRC/install.sh")
 print -r -- "$inst" | grep -q "added source block"
 [[ -f $UH/.zshrc ]] || die ".zshrc not created"
-grep -q '# >>> codex-switch >>>' "$UH/.zshrc" || die "marker begin missing"
-grep -q '# <<< codex-switch <<<' "$UH/.zshrc" || die "marker end missing"
-for f in cx_core.py cx_statusline.py codex-switch.zsh codex-switch.bash codex-switch.fish; do
-  [[ -f $UH/.codex-switch/$f ]] || die "$f not installed"
+grep -q '# >>> zorua >>>' "$UH/.zshrc" || die "marker begin missing"
+grep -q '# <<< zorua <<<' "$UH/.zshrc" || die "marker end missing"
+for f in cx_core.py cx_statusline.py zorua.zsh zorua.bash zorua.fish; do
+  [[ -f $UH/.zorua/$f ]] || die "$f not installed"
 done
-grep -q '# >>> codex-switch >>>' "$UH/.bashrc" || die "bashrc block missing"
+grep -q '# >>> zorua >>>' "$UH/.bashrc" || die "bashrc block missing"
 if (( $+commands[fish] )); then
-  grep -q 'codex-switch.fish' "$UH/.config/fish/conf.d/codex-switch.fish" || die "fish conf.d missing"
+  grep -q 'zorua.fish' "$UH/.config/fish/conf.d/zorua.fish" || die "fish conf.d missing"
 fi
 ok "install.sh (plain sh) worked for $E2E_USER: core + zsh/bash/fish wired"
 
 step "2. installer is idempotent"
 inst=$(su "$E2E_USER" -s "$ZSH_BIN" -c "sh $SRC/install.sh")
 print -r -- "$inst" | grep -q "already present"
-(( $(grep -c 'codex-switch >>>' $UH/.zshrc) == 1 )) || die "marker block duplicated"
+(( $(grep -c 'zorua >>>' $UH/.zshrc) == 1 )) || die "marker block duplicated"
 ok "second install does not duplicate the block"
 
 step "3. fresh interactive zsh works + add/use + fake codex + bind/unbind"
@@ -65,7 +65,7 @@ set -e
 
 export PATH="\$HOME/bin:\$PATH"
 
-cx version | grep -q "CodeX Switch"
+cx version | grep -q "Zorua"
 out=\$(cx ls)
 print -rn -- "\$out" | grep -q default
 if print -rn -- "\$out" | grep -q demo; then echo FAIL_DEMO_PRESENT; exit 1; fi
@@ -124,7 +124,7 @@ step "3b. bash and fish wrappers work in a fresh interactive shell"
 cat > "$UH/scenario.bash" <<'EOF'
 set -e
 export PATH="$HOME/bin:$PATH"
-cx version | grep -q "CodeX Switch"
+cx version | grep -q "Zorua"
 cx add demo2 --no-login >/dev/null
 cx use demo2 >/dev/null
 [ "$CODEX_HOME" = "$HOME/.codex-demo2" ]
@@ -142,13 +142,13 @@ cx rm demo2 --purge >/dev/null
 echo E2E_BASH_OK
 EOF
 chown "$E2E_USER" "$UH/scenario.bash"
-out=$(su "$E2E_USER" -s /bin/bash -c "bash -i -c 'source \$HOME/.codex-switch/codex-switch.bash; source \$HOME/scenario.bash'" 2>&1) || { print "$out" >&2; die "bash scenario failed"; }
+out=$(su "$E2E_USER" -s /bin/bash -c "bash -i -c 'source \$HOME/.zorua/zorua.bash; source \$HOME/scenario.bash'" 2>&1) || { print "$out" >&2; die "bash scenario failed"; }
 print "$out" | grep -q E2E_BASH_OK || die "bash scenario did not report success
 $out"
 ok "bash wrapper: add/use/prompt/bind/hook/rm"
 if (( $+commands[fish] )); then
   cat > "$UH/scenario.fish" <<'EOF'
-cx version | grep -q "CodeX Switch"; or exit 1
+cx version | grep -q "Zorua"; or exit 1
 cx add demo3 --no-login >/dev/null; or exit 1
 cx use demo3 >/dev/null
 test "$CODEX_HOME" = "$HOME/.codex-demo3"; or begin; echo BAD_USE; exit 1; end
@@ -166,7 +166,7 @@ cx rm demo3 --purge >/dev/null
 echo E2E_FISH_OK
 EOF
   chown "$E2E_USER" "$UH/scenario.fish"
-  out=$(su "$E2E_USER" -s "$(whence -p fish)" -c "source \$HOME/.codex-switch/codex-switch.fish; source \$HOME/scenario.fish" 2>&1) || { print "$out" >&2; die "fish scenario failed"; }
+  out=$(su "$E2E_USER" -s "$(whence -p fish)" -c "source \$HOME/.zorua/zorua.fish; source \$HOME/scenario.fish" 2>&1) || { print "$out" >&2; die "fish scenario failed"; }
   print "$out" | grep -q E2E_FISH_OK || die "fish scenario did not report success
 $out"
   ok "fish wrapper: add/use/bind/hook/rm"
@@ -182,23 +182,46 @@ print "$out" | grep -q "python3 is required" || die "no-python message missing
 $out"
 ok "clear message when python3 is missing"
 
+step "4b. upgrading from the old codex-switch install"
+OLD_USER="${E2E_USER}old"
+id "$OLD_USER" >/dev/null 2>&1 && userdel -r "$OLD_USER"
+useradd -m -s "$ZSH_BIN" "$OLD_USER"
+OH=$(getent passwd "$OLD_USER" | cut -d: -f6)
+mkdir -p "$OH/.codex-switch" "$OH/.config/codex-switch" "$OH/.codex-keep"
+echo "stale old script" > "$OH/.codex-switch/codex-switch.zsh"
+printf 'default\t%s/.codex\nkeep\t%s/.codex-keep\n' "$OH" "$OH" > "$OH/.config/codex-switch/accounts.tsv"
+printf 'export FOO=1\n\n# >>> codex-switch >>>\nsource "%s/.codex-switch/codex-switch.zsh"\n# <<< codex-switch <<<\n' "$OH" > "$OH/.zshrc"
+chown -R "$OLD_USER" "$OH"
+inst=$(su "$OLD_USER" -s "$ZSH_BIN" -c "sh $SRC/install.sh")
+print -r -- "$inst" | grep -q "migrated: removed the old codex-switch block" || die "legacy block not migrated
+$inst"
+! grep -q 'codex-switch' "$OH/.zshrc" || die "legacy source line still in .zshrc"
+grep -q 'FOO=1' "$OH/.zshrc" || die "unrelated .zshrc content must survive"
+(( $(grep -c '# >>> zorua >>>' "$OH/.zshrc") == 1 )) || die "new block missing or duplicated"
+out=$(su "$OLD_USER" -s "$ZSH_BIN" -c "$ZSH_BIN -i -c 'cx ls'" 2>&1)
+print -r -- "$out" | grep -q "keep" || die "accounts were not carried over
+$out"
+[[ -d $OH/.config/codex-switch ]] || die "old config must be kept as a backup"
+userdel -r "$OLD_USER" 2>/dev/null || true
+ok "old install migrated: rc block replaced, accounts carried over, backup kept"
+
 step "5. uninstaller removes the block but never account data"
 mkdir -p "$UH/.codex-demo"
 un=$(su "$E2E_USER" -s "$ZSH_BIN" -c "sh $SRC/uninstall.sh")
 print -r -- "$un" | grep -q "removed source block"
-! grep -q codex-switch "$UH/.zshrc" || die "zshrc still references codex-switch"
-! grep -q codex-switch "$UH/.bashrc" || die "bashrc still references codex-switch"
-[[ ! -e $UH/.config/fish/conf.d/codex-switch.fish ]] || die "fish conf.d not removed"
-[[ -d $UH/.codex-demo && -f $UH/.config/codex-switch/accounts.tsv ]] || die "account data was deleted"
+! grep -q zorua "$UH/.zshrc" || die "zshrc still references zorua"
+! grep -q zorua "$UH/.bashrc" || die "bashrc still references zorua"
+[[ ! -e $UH/.config/fish/conf.d/zorua.fish ]] || die "fish conf.d not removed"
+[[ -d $UH/.codex-demo && -f $UH/.config/zorua/accounts.tsv ]] || die "account data was deleted"
 ok "uninstall.sh clean, data intact"
 
 step "6. syntax"
-zsh -n "$SRC/codex-switch.zsh"
-bash -n "$SRC/codex-switch.bash"
+zsh -n "$SRC/zorua.zsh"
+bash -n "$SRC/zorua.bash"
 python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$SRC/cx_core.py"
 sh -n "$SRC/install.sh"
 sh -n "$SRC/uninstall.sh"
-if (( $+commands[fish] )); then fish -n "$SRC/codex-switch.fish"; fi
+if (( $+commands[fish] )); then fish -n "$SRC/zorua.fish"; fi
 ok "all scripts parse"
 
 print ""

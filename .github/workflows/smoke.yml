@@ -24,7 +24,7 @@ jobs:
       - name: Syntax check
         run: |
           python3 -c "import ast,sys; ast.parse(open('cx_core.py').read())"
-          zsh -n codex-switch.zsh
+          zsh -n zorua.zsh
           sh -n install.sh
           sh -n uninstall.sh
 
@@ -50,8 +50,8 @@ jobs:
 
       - name: Syntax check
         run: |
-          bash -n codex-switch.bash
-          fish -n codex-switch.fish
+          bash -n zorua.bash
+          fish -n zorua.fish
 
       - name: bash smoke tests
         run: bash tests/smoke.bash
