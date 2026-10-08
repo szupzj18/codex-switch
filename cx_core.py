@@ -15,12 +15,13 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 HOME = os.path.expanduser("~")
 CONFIG_DIR = os.environ.get("CX_CONFIG_DIR") or os.path.join(
     os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "codex-switch")
@@ -30,7 +31,7 @@ CLAUDE_FILE = os.path.join(CONFIG_DIR, "claude-accounts.tsv")
 SHELL = os.environ.get("CX_SHELL", "zsh")
 RESERVED = {"ls", "list", "status", "usage", "setup", "use", "login", "off", "reset",
             "unset", "help", "add", "rm", "bind", "unbind", "binds", "version",
-            "prompt", "apply", "names", "-h", "--help", "-v", "--version"}
+            "prompt", "apply", "names", "hook", "-h", "--help", "-v", "--version"}
 
 
 # --------------------------------------------------------------------------
@@ -191,6 +192,15 @@ def claude_clean_env(home):
         env["ANTHROPIC_BASE_URL"] = OFFICIAL_URL
     env["CLAUDE_CONFIG_DIR"] = home
     return env
+
+
+def claude_usage_cache(home):
+    """-> dict from the status-line relay's cache (see cx_statusline.py) or None."""
+    try:
+        with open(os.path.join(home, ".cx-usage.json")) as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 
 def claude_status(home):
@@ -385,6 +395,7 @@ def render(online, verbose):
             r["plan"] = st.get("subscriptionType")
         return r
 
+    claude_age = {}
     info = {n: load(h) for n, h in accts if kind[n] == "codex"}
     with ThreadPoolExecutor(max_workers=8) as ex:
         cfuts = {n: ex.submit(load_claude, h) for n, h in accts if kind[n] == "claude"}
@@ -395,6 +406,25 @@ def render(online, verbose):
             futs = {n: ex.submit(fetch, info[n]["tok"]) for n, _ in accts
                     if kind[n] == "codex" and info[n]["state"] == "ok"}
             live = {n: f.result() for n, f in futs.items()}
+        # Claude Code windows come from the status-line relay's cache, not the network.
+        # A window is dropped once its reset time has passed (it no longer applies).
+        now = time.time()
+        for n, h in accts:
+            if kind[n] != "claude":
+                continue
+            c = claude_usage_cache(h) or {}
+            ws = []
+            for key, secs in (("five_hour", 18000), ("seven_day", 604800)):
+                w = c.get(key)
+                if isinstance(w, dict) and w.get("resets_at") and w["resets_at"] > now:
+                    ws.append({"limit_window_seconds": secs, "used_percent": int(round(float(w["used_percentage"]))),
+                               "reset_after_seconds": int(w["resets_at"] - now)})
+            claude_age[n] = (int(now - c["updated_at"]) if c.get("updated_at") else None) if c else None
+            if ws:
+                live[n] = ({"rate_limit": {"primary_window": ws[0], "secondary_window": ws[1] if len(ws) > 1 else None}}, None)
+
+    def ago(secs):
+        return "%dm" % (secs // 60) if secs < 3600 else "%dh%dm" % (secs // 3600, secs % 3600 // 60) if secs < 86400 else "%dd" % (secs // 86400)
 
     def left(s):
         s = int(s)
@@ -452,7 +482,11 @@ def render(online, verbose):
         return paint("36", "●") if is_cur(n) else paint("33", "◆") if is_auto(n) else " "
 
     def table(rows, header):
-        widths = [max(len(r[i][0]) for r in [header] + rows) for i in range(len(header))]
+        # A short row (e.g. an error message in place of the usage columns) spills
+        # its last cell to the right; it must not widen the column it starts in.
+        def counts(r, i):
+            return i < len(r) and (len(r) == len(header) or i < len(r) - 1)
+        widths = [max([len(r[i][0]) for r in [header] + rows if counts(r, i)] or [0]) for i in range(len(header))]
         for r in [header] + rows:
             out = []
             for i, (s, code) in enumerate(r):
@@ -497,7 +531,7 @@ def render(online, verbose):
             plan = (d or {}).get("plan_type") or i["plan"]
             exp, ecode = expiry(i["until"])
             row = [name_cell(n)] + tool_cells(n) + [(plan or "–", PLAN.get(plan, "2"))]
-            if kind[n] == "claude" and i["state"] == "ok":
+            if kind[n] == "claude" and i["state"] == "ok" and not ws:
                 row += [("–", "2"), ("–", "2"), ("–", "2"), ("–", "2")]
                 rows.append(row)
                 continue
@@ -526,7 +560,13 @@ def render(online, verbose):
     if any(is_cur(n) or is_auto(n) for n, _ in accts):
         notes.append("● this shell  ◆ auto-bound directory")
     if online and has_claude:
-        notes.append("usage limits are not available for Claude accounts (plan only)")
+        for n, _ in accts:
+            if kind[n] != "claude":
+                continue
+            if claude_age.get(n) is not None:
+                notes.append("%s: Claude usage as of %s ago (from its last session)" % (n, ago(claude_age[n])))
+            else:
+                notes.append("%s: no Claude usage yet — run 'cx hook install %s', then use claude once" % (n, n))
     if stale[0]:
         notes.append("⚠ expired or within 7 days (date comes from the cached sign-in token, may be stale)")
     if not online:
@@ -840,6 +880,108 @@ def cmd_binds():
     return 0
 
 
+def hook_script():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cx_statusline.py")
+
+
+def unwrap_status_command(cmd):
+    """If `cmd` is our relay, return the wrapped original command ('' if none); else None."""
+    try:
+        parts = shlex.split(cmd)
+    except ValueError:
+        return None
+    if len(parts) >= 2 and os.path.basename(parts[1]) == "cx_statusline.py":
+        rest = parts[2:]
+        if rest[:1] == ["--"]:
+            rest = rest[1:]
+        return rest[0] if rest else ""
+    return None
+
+
+def wrap_status_command(orig):
+    base = "python3 %s" % shlex.quote(hook_script())
+    return "%s -- %s" % (base, shlex.quote(orig)) if orig else base
+
+
+def cmd_hook(args):
+    """cx hook install|remove|status <claude account> [--dry-run]"""
+    usage = "usage: cx hook install|remove|status <claude-account> [--dry-run]"
+    dry = "--dry-run" in args
+    args = [a for a in args if a != "--dry-run"]
+    if len(args) != 2 or args[0] not in ("install", "remove", "status"):
+        err(usage)
+        return 1
+    action, name = args
+    if kind_of(name) != "claude":
+        err("cx: '%s' is not a Claude account (cx add --claude <name>)" % name)
+        return 1
+    home = registry("claude")[name]
+    path = os.path.realpath(os.path.join(home, "settings.json"))
+    try:
+        with open(path) as f:
+            settings = json.load(f)
+    except FileNotFoundError:
+        settings = {}
+    except ValueError as e:
+        err("cx: cannot parse %s: %s" % (path, e))
+        return 1
+    sl = settings.get("statusLine") if isinstance(settings.get("statusLine"), dict) else {}
+    cur = sl.get("command", "") or ""
+    orig = unwrap_status_command(cur)
+    cache = claude_usage_cache(home)
+
+    if action == "status":
+        print("settings: %s" % path)
+        print("relay:    %s" % ("installed" if orig is not None else "not installed"))
+        print("wraps:    %s" % ((orig or "(nothing)") if orig is not None else (cur or "(no status line configured)")))
+        if cache and cache.get("updated_at"):
+            print("cache:    updated %ds ago" % int(time.time() - cache["updated_at"]))
+        else:
+            print("cache:    none yet (use claude once with the relay installed)")
+        return 0
+
+    if action == "install":
+        if orig is not None:
+            print("already installed for %s" % name)
+            return 0
+        new_cmd = wrap_status_command(cur)
+        new_sl = dict(sl, type="command", command=new_cmd)
+    else:
+        if orig is None:
+            print("not installed for %s" % name)
+            return 0
+        new_sl = dict(sl)
+        if orig:
+            new_sl["command"] = orig
+        else:
+            new_sl = None
+
+    print("%s: %s" % (path, "statusLine.command"))
+    print("  - %s" % (cur or "(none)"))
+    print("  + %s" % ((new_sl or {}).get("command") or "(statusLine removed)"))
+    if dry:
+        print("(dry run, nothing written)")
+        return 0
+    import shutil
+    if os.path.exists(path):
+        backup = "%s.cx-bak-%d" % (path, int(time.time()))
+        shutil.copy2(path, backup)
+        print("backup: %s" % backup)
+    if new_sl is None:
+        settings.pop("statusLine", None)
+    else:
+        settings["statusLine"] = new_sl
+    tmp = path + ".cx.tmp"
+    with open(tmp, "w") as f:
+        json.dump(settings, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    if os.path.exists(path):
+        os.chmod(tmp, os.stat(path).st_mode & 0o777)
+    os.replace(tmp, path)
+    print("%s for %s" % ("installed" if action == "install" else "removed", name))
+    return 0
+
+
 HELP = """  cx                         list accounts, emails, plan and subscription expiry
   cx setup                   interactive first-run wizard (adopt homes, sign in, add, bind)
   cx usage [-v]              live limits (5h/7d bars); -v = detailed blocks (also: cx ls -v)
@@ -857,6 +999,8 @@ HELP = """  cx                         list accounts, emails, plan and subscript
   cx bind [name]             bind current directory (default: current account)
   cx unbind [dir]            remove a directory binding (default: current dir)
   cx binds                   list project bindings
+  cx hook install <claude>   relay Claude Code's status-line rate_limits into a cache so
+                             cx usage can show 5h/7d (also: hook remove|status, --dry-run)
   cx prompt                  print the prompt marker (also in $CX_PROMPT_TEXT)
   cx version                 print CodeX Switch version
 """
@@ -967,6 +1111,8 @@ def main(argv):
         print("CodeX Switch %s" % VERSION)
     elif sub in ("help", "-h", "--help"):
         rc = cmd_help()
+    elif sub == "hook":
+        rc = cmd_hook(rest)
     elif sub == "prompt":
         print(st.prompt_info()[2])
     elif sub == "apply":

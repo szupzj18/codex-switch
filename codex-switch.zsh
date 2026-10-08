@@ -62,7 +62,7 @@ _cx() {
   names=(${(f)"$(CX_SHELL=zsh python3 $CX_CORE names 2>/dev/null)"})
   if (( CURRENT == 2 )); then
     _alternative \
-      'subcommands:cx command:(ls usage setup use login off add rm bind unbind binds prompt version help)' \
+      'subcommands:cx command:(ls usage setup use login off add rm bind unbind binds hook prompt version help)' \
       "accounts:codex account:($names)"
   elif (( CURRENT == 3 )); then
     case $words[2] in

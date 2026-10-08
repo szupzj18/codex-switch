@@ -48,8 +48,16 @@ Things worth knowing:
   local proxy). `cx use` warns when any of them is present; the one-shot form
   `cx alt ...` removes them for that run and pins `ANTHROPIC_BASE_URL` to
   `https://api.anthropic.com` if it was set.
-- Account and plan come from `claude auth status`; live usage limits are not
-  available for Claude accounts.
+- Account and plan come from `claude auth status`. Usage windows (5h / 7d) come
+  from Claude Code's documented status-line data (`rate_limits`, claude.ai
+  Pro/Max only): `cx hook install alt` wraps the account's status-line command
+  in a small relay (`cx_statusline.py`) that saves those two windows to
+  `<config dir>/.cx-usage.json` and then runs your original command unchanged.
+  `cx usage` shows the cached values with their age; a window disappears once its
+  reset time has passed. It reads no credentials and makes no network calls. The
+  data only exists after the account has been used once with the relay installed.
+  `cx hook install alt --dry-run` previews the change, a backup of `settings.json`
+  is written first, and `cx hook remove alt` restores the original command.
 - Only subscription (claude.ai) logins are isolated per directory. A Console
   sign-in without an API key is stored outside the config directory and is
   shared. Phase 1 does not manage third-party providers or API keys.
@@ -156,6 +164,7 @@ from their parent.
 | `cx login <name>` | (Re)run `codex login` for one account |
 | `cx off` | Clear the switch in this shell |
 | `cx add <name>` | Create a Codex account: new `CODEX_HOME` + sign-in |
+| `cx hook install\|remove\|status <claude>` | Relay Claude Code's status-line `rate_limits` into a cache so `cx usage` can show 5h/7d (`--dry-run` previews) |
 | `cx add --claude <name>` | Create a Claude Code subscription account: new `CLAUDE_CONFIG_DIR` + `claude auth login` |
 | `cx add ... --home DIR` | Register an existing home directory instead |
 | `cx add ... --no-login` / `--device-auth` | Skip login / use headless sign-in |
