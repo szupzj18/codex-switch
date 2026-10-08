@@ -56,6 +56,25 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/uni
 
 Account names: letters, digits, `-` and `_`; they must not collide with a command name, and are unique across Codex and Claude accounts. `default` is the built-in Codex account (~/.codex) and cannot be removed.
 
+## Example output
+
+`zorua usage` groups accounts by agent (headings appear only when both agents have accounts). Colors only on a TTY.
+
+     Codex
+       NAME     PLAN    5H           7D           RESET  EXPIRES
+     ● default  pro     –            ▓░░░░░   6%  4d9h   2026-11-02
+       work     promax  –            ░░░░░░   0%  7d     2026-11-07
+       side     team    ░░░░░░   0%  ▓▓░░░░  26%  1d15h  2026-10-17
+
+     Claude Code
+       NAME  PLAN  5H           7D           RESET
+       alt   max   ▓▓▓░░░  42%  ▓░░░░░   7%  4d9h
+
+     ● this shell  ◆ auto-bound directory
+     alt: Claude usage as of 3m ago (from its last session)
+
+`●` marks the account active in this shell, `◆` one switched by a directory binding. Codex windows are live (queried now); Claude windows are the last values cached by the status-line relay and show their age.
+
 ## Guidance for agents
 
 - `zorua` is a shell FUNCTION, not an executable. It exists only in interactive shells that sourced the wrapper. In a non-interactive subprocess (typical for an agent tool call) use one of:

@@ -68,25 +68,42 @@ window 3  <span class="g">client-acme</span></pre>
 <span class="g">$</span> codex
 <span class="d">signed in as</span> alice@company.com</pre></div>
     <div class="term"><div class="bar"><i></i><i></i><i></i><b>pane 2</b></div>
-<pre><span class="d">~/code/side-project</span> <span class="p">[codex:side]</span>
-<span class="g">$</span> codex
-<span class="d">signed in as</span> bob@gmail.com</pre></div>
+<pre><span class="d">~/code/side-project</span> <span class="p">[claude:alt]</span>
+<span class="g">$</span> claude
+<span class="d">signed in as</span> alice@gmail.com <span class="d">(Claude Code)</span></pre></div>
   </div>
 
   <div class="term"><div class="bar"><i></i><i></i><i></i><b>zorua usage</b></div>
 <pre><span class="g">$</span> zorua usage
+<b> Codex</b>
 <span class="d">   NAME     PLAN    5H           7D           RESET  EXPIRES</span>
  <span class="g">●</span> default  <span class="g">pro</span>     <span class="d">–</span>            <span class="g">▓</span><span class="d">░░░░░</span>   6%  4d9h   2026-11-02
    work     <span class="p">promax</span>  <span class="d">–</span>            <span class="d">░░░░░░</span>   0%  7d     2026-11-07
-   side     <span class="g">team</span>    <span class="d">░░░░░░</span>   0%  <span class="g">▓▓</span><span class="d">░░░░</span>  26%  1d15h  2026-10-17</pre></div>
+   side     <span class="g">team</span>    <span class="d">░░░░░░</span>   0%  <span class="g">▓▓</span><span class="d">░░░░</span>  26%  1d15h  2026-10-17
+
+<b> Claude Code</b>
+<span class="d">   NAME  PLAN  5H           7D           RESET</span>
+   alt   <span class="p">max</span>   <span class="g">▓▓▓</span><span class="d">░░░</span>  42%  <span class="g">▓</span><span class="d">░░░░░</span>   7%  4d9h
+
+<span class="d"> ● this shell  ◆ auto-bound directory</span>
+<span class="d"> alt: Claude usage as of 3m ago (from its last session)</span></pre></div>
 
   <div class="term" style="margin-top:12px"><div class="bar"><i></i><i></i><i></i><b>zorua usage -v</b></div>
 <pre><span class="g">$</span> zorua usage -v
+<b> Codex</b>
 <span class="d"> ──────────────────────────────────────────────────────────</span>
- <span class="g">●</span> <b>side</b>        bob@gmail.com  <span class="g">team</span>  exp 2026-10-17
+ <span class="g">●</span> <b>side      </b>  bob@gmail.com  <span class="g">team</span>  exp 2026-10-17
    <span class="d">~/.codex-side</span>
    5h  <span class="d">░░░░░░░░░░░░░░░░░░░░</span>   0%   <span class="d">resets in 5h0m</span>
-   7d  <span class="g">▓▓▓▓▓</span><span class="d">░░░░░░░░░░░░░░░</span>  26%   <span class="d">resets in 1d15h</span>
+   7d  <span class="g">▓▓▓▓▓▓</span><span class="d">░░░░░░░░░░░░░░</span>  26%   <span class="d">resets in 1d15h</span>
+<span class="d"> ──────────────────────────────────────────────────────────</span>
+
+<b> Claude Code</b>
+<span class="d"> ──────────────────────────────────────────────────────────</span>
+ <span class="g">●</span> <b>alt       </b>  alice@gmail.com  <span class="p">max</span>
+   <span class="d">~/.claude-alt</span>
+   5h  <span class="g">▓▓▓▓▓▓▓▓▓</span><span class="d">░░░░░░░░░░░</span>  42%   <span class="d">resets in 2h10m</span>
+   7d  <span class="g">▓▓</span><span class="d">░░░░░░░░░░░░░░░░░░</span>   7%   <span class="d">resets in 4d9h</span>
 <span class="d"> ──────────────────────────────────────────────────────────</span></pre></div>
 
   <h2>features</h2>
