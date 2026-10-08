@@ -39,6 +39,7 @@ contains "$out" "pro" "plan column"
 contains "$out" "2030-01-02" "expiry column"
 not_contains "$out" $'\033' "no colors when piped"
 contains "$(cx ls -v)" "~/.codex-work" "verbose view"
+not_contains "$out" "Claude Code" "no section headings while only codex accounts exist"
 ok "first run + ls"
 
 contains "$(cx version)" "CodeX Switch" "version"
@@ -107,7 +108,8 @@ cx add --claude alt >/dev/null
 out=$(cx ls)
 contains "$out" "claude@example.com" "claude account email from claude auth status"
 contains "$out" "max" "claude plan"
-contains "$out" "TOOL" "tool column appears once a claude account exists"
+contains "$out" "Claude Code" "claude accounts get their own section"
+contains "$out" "Codex" "codex accounts get their own section"
 if cx add --claude work 2>/dev/null; then die "name clash across kinds must fail"; fi
 if cx add --claude x --device-auth 2>/dev/null; then die "--device-auth is codex-only"; fi
 ok "add --claude + ls (shared namespace)"
