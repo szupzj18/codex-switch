@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# CodeX Switch smoke test — runs entirely inside a temporary HOME.
+# Zorua smoke test — runs entirely inside a temporary HOME.
 # It never touches the real ~/.codex*, CX registry, or invokes the real codex.
 #
 #   zsh tests/smoke.zsh
@@ -9,7 +9,7 @@ set -e
 setopt pipe_fail
 
 ROOT="${0:A:h:h}"
-SCRIPT="$ROOT/codex-switch.zsh"
+SCRIPT="$ROOT/zorua.zsh"
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -177,8 +177,8 @@ mkdir -p "$HOME/.codex-adopt"
 print -r -- '{"tokens":{"id_token":"x.eyJlbWFpbCI6ImFkb3B0QGV4YW1wbGUuY29tIn0.s"}}' > "$HOME/.codex-adopt/auth.json"
 # answers: register adopt=y, sign in default=n, add another=n, show usage=n
 out=$(printf 'y\nn\nn\nn\n' | cx setup 2>&1)
-contains "$out" "CodeX Switch setup" "setup banner"
-contains "$(<"$XDG_CONFIG_HOME/codex-switch/accounts.tsv")" "adopt	$HOME/.codex-adopt" "setup registers discovered home"
+contains "$out" "Zorua setup" "setup banner"
+contains "$(<"$XDG_CONFIG_HOME/zorua/accounts.tsv")" "adopt	$HOME/.codex-adopt" "setup registers discovered home"
 out=$(cx setup </dev/null 2>&1) || die "setup must not fail on EOF"
 ok "cx setup adopts existing homes and survives EOF"
 
@@ -199,7 +199,7 @@ ok "claude accounts work through the zsh wrapper"
 # ---- 9. version --------------------------------------------------------------
 
 out=$(cx version)
-contains "$out" "CodeX Switch" "version output"
+contains "$out" "Zorua" "version output"
 ok "version command"
 
 print ""

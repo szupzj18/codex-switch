@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""CodeX Switch core: shell-independent logic for the `cx` command.
+"""Zorua core: shell-independent logic for the `cx` command.
 
-The per-shell wrappers (codex-switch.zsh / .bash / .fish) are thin: they run
+The per-shell wrappers (zorua.zsh / .bash / .fish) are thin: they run
 this program and then `source` the statements it wrote to $CX_EVAL_FILE
 (CODEX_HOME changes, auto-binding state, prompt marker). Everything else
 (registry, bindings, rendering, login, setup wizard) lives here.
@@ -21,10 +21,10 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
-VERSION = "0.3.1"
+VERSION = "0.4.0"
 HOME = os.path.expanduser("~")
 CONFIG_DIR = os.environ.get("CX_CONFIG_DIR") or os.path.join(
-    os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "codex-switch")
+    os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "zorua")
 ACCOUNT_FILE = os.path.join(CONFIG_DIR, "accounts.tsv")
 BINDING_FILE = os.path.join(CONFIG_DIR, "bindings.tsv")
 CLAUDE_FILE = os.path.join(CONFIG_DIR, "claude-accounts.tsv")
@@ -112,8 +112,27 @@ def write_tsv(path, rows):
     os.replace(tmp, path)
 
 
+LEGACY_CONFIG_DIR = os.path.join(os.path.dirname(CONFIG_DIR), "codex-switch")
+
+
+def migrate_legacy_config():
+    """Zorua was called codex-switch: copy its registry/bindings once (the old files stay as a backup)."""
+    if os.path.exists(ACCOUNT_FILE) or os.environ.get("CX_CONFIG_DIR"):
+        return
+    legacy = os.path.join(LEGACY_CONFIG_DIR, "accounts.tsv")
+    if not os.path.exists(legacy):
+        return
+    import shutil
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    for fn in ("accounts.tsv", "claude-accounts.tsv", "bindings.tsv"):
+        src = os.path.join(LEGACY_CONFIG_DIR, fn)
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(CONFIG_DIR, fn))
+
+
 def init_registry():
     """First run: seed `default` and adopt ~/.codex-* homes that hold a sign-in."""
+    migrate_legacy_config()
     if os.path.exists(ACCOUNT_FILE):
         return
     rows = [("default", os.path.join(HOME, ".codex"))]
@@ -374,7 +393,7 @@ def render(online, verbose):
             "https://chatgpt.com/backend-api/wham/usage",
             headers={"Authorization": "Bearer " + tok["access_token"],
                      "chatgpt-account-id": tok.get("account_id", ""),
-                     "User-Agent": "codex-switch"})
+                     "User-Agent": "zorua"})
         try:
             return json.load(urllib.request.urlopen(req, timeout=15)), None
         except urllib.error.HTTPError as e:
@@ -1029,11 +1048,26 @@ def cmd_hook(args):
     usage = "usage: cx hook install|remove <claude-account> [--dry-run] [--yes] | cx hook remove --all | cx hook status [<claude-account>]"
     dry, yes, every = "--dry-run" in args, "--yes" in args, "--all" in args
     args = [a for a in args if a not in ("--dry-run", "--yes", "--all")]
-    if not args or args[0] not in ("install", "remove", "status") or len(args) > 2:
+    if not args or args[0] not in ("install", "remove", "status", "refresh") or len(args) > 2:
         err(usage)
         return 1
     action = args[0]
     names = [n for n, _ in claude_accounts()]
+    if action == "refresh":
+        # Re-write the relay command of accounts that already use it (after an upgrade or move).
+        for name in names:
+            if not hook_installed(name):
+                continue
+            home = registry("claude")[name]
+            try:
+                with open(os.path.realpath(os.path.join(home, "settings.json"))) as f:
+                    cur = (json.load(f).get("statusLine") or {}).get("command", "") or ""
+            except Exception:
+                continue
+            if cur != wrap_status_command(unwrap_status_command(cur) or ""):
+                print("[%s]" % name)
+                hook_one("install", name, False, True)
+        return 0
     if len(args) == 1:
         if action == "status" or (action == "remove" and every):
             targets = names
@@ -1091,12 +1125,12 @@ HELP = """  cx                         list accounts, emails, plan and subscript
                              hook status [name], --dry-run; an account with no status
                              line needs --yes or a confirmation)
   cx prompt                  print the prompt marker (also in $CX_PROMPT_TEXT)
-  cx version                 print CodeX Switch version
+  cx version                 print Zorua version
 """
 
 
 def cmd_help():
-    print("cx — CodeX Switch: parallel multi-account manager for Codex CLI")
+    print("cx — Zorua: parallel multi-account manager for Codex CLI")
     print(HELP)
     print("  accounts: %s" % " ".join(homes()))
     print("  files:    %s" % ACCOUNT_FILE)
@@ -1105,7 +1139,7 @@ def cmd_help():
 
 
 def cmd_setup(st):
-    print("\033[1m CodeX Switch setup\033[0m" if sys.stdout.isatty() else " CodeX Switch setup")
+    print("\033[1m Zorua setup\033[0m" if sys.stdout.isatty() else " Zorua setup")
     print()
     import shutil
     codex = shutil.which("codex")
@@ -1197,7 +1231,7 @@ def main(argv):
     elif sub == "binds":
         rc = cmd_binds()
     elif sub in ("version", "-v", "--version"):
-        print("CodeX Switch %s" % VERSION)
+        print("Zorua %s" % VERSION)
     elif sub in ("help", "-h", "--help"):
         rc = cmd_help()
     elif sub == "hook":

@@ -1,5 +1,5 @@
-# CodeX Switch — parallel multi-account manager for the OpenAI Codex CLI (fish wrapper)
-# https://github.com/szupzj18/codex-switch
+# Zorua — parallel multi-account manager for the OpenAI Codex CLI (fish wrapper)
+# https://github.com/szupzj18/zorua
 #
 # Thin shell layer: all logic lives in cx_core.py (next to this file).
 # The prompt marker is exposed as $CX_PROMPT_TEXT; add it to your prompt, e.g.
@@ -13,11 +13,11 @@ set -g _CX_PRE_AUTO_CLAUDE ""
 set -g CX_PROMPT_KIND ""
 set -g CX_PROMPT_NAME ""
 set -g CX_PROMPT_TEXT ""
-set -g _CX_BINDINGS (test -n "$CX_CONFIG_DIR"; and echo $CX_CONFIG_DIR; or echo (test -n "$XDG_CONFIG_HOME"; and echo $XDG_CONFIG_HOME; or echo $HOME/.config)/codex-switch)/bindings.tsv
+set -g _CX_BINDINGS (test -n "$CX_CONFIG_DIR"; and echo $CX_CONFIG_DIR; or echo (test -n "$XDG_CONFIG_HOME"; and echo $XDG_CONFIG_HOME; or echo $HOME/.config)/zorua)/bindings.tsv
 
 if not command -q python3
     function cx
-        echo "cx: python3 is required (CodeX Switch core is written in Python 3.8+)" >&2
+        echo "cx: python3 is required (Zorua core is written in Python 3.8+)" >&2
         return 1
     end
     exit 0

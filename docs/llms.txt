@@ -1,15 +1,17 @@
-# CodeX Switch
+# Zorua
+
+(formerly CodeX Switch / codex-switch; renamed in 0.4.0. The command is still `cx`. Re-running the installer migrates old installs.)
 
 > Parallel multi-account manager for the OpenAI Codex CLI and Claude Code. Each account gets its own CODEX_HOME (Codex) or CLAUDE_CONFIG_DIR (Claude Code) directory; a shell function `cx` picks one per terminal, so several accounts can be used at the same time. Works in zsh, bash and fish. MIT licensed.
 
-Repo: https://github.com/szupzj18/codex-switch
-Site: https://szupzj18.github.io/codex-switch/
-This file: https://szupzj18.github.io/codex-switch/llms.txt
-Full docs: https://github.com/szupzj18/codex-switch/blob/main/README.md
+Repo: https://github.com/szupzj18/zorua
+Site: https://szupzj18.github.io/zorua/
+This file: https://szupzj18.github.io/zorua/llms.txt
+Full docs: https://github.com/szupzj18/zorua/blob/main/README.md
 
 ## What it is (and is not)
 
-- One Python 3.8+ program (`cx_core.py`, standard library only) plus a thin wrapper per shell (`codex-switch.zsh`, `.bash`, `.fish`).
+- One Python 3.8+ program (`cx_core.py`, standard library only) plus a thin wrapper per shell (`zorua.zsh`, `.bash`, `.fish`).
 - Isolation is done by setting the `CODEX_HOME` environment variable. There is no global "active account", no daemon, no proxy, and no wrapper around the `codex` binary.
 - It manages the Codex CLI and Claude Code (subscription logins). The Codex desktop app and the VS Code extension do not read CODEX_HOME.
 - Claude Code accounts use Claude Code's own multi-account mechanism: one CLAUDE_CONFIG_DIR per account (settings, history and the login are per directory; on macOS the Keychain entry name is derived from the directory path).
@@ -23,10 +25,10 @@ Full docs: https://github.com/szupzj18/codex-switch/blob/main/README.md
 
 ## Install
 
-    curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/install.sh | sh
+    curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/install.sh | sh
 
-This copies the files to ~/.codex-switch (override with CX_HOME) and appends a marked `source` block to ~/.zshrc, ~/.bashrc and ~/.config/fish/conf.d/codex-switch.fish for the shells it finds. It is idempotent. A new terminal is required afterwards.
-Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/main/uninstall.sh | sh -s -- --purge` (drop `--purge` to keep ~/.codex-switch). Account data is never deleted.
+This copies the files to ~/.zorua (override with CX_HOME) and appends a marked `source` block to ~/.zshrc, ~/.bashrc and ~/.config/fish/conf.d/zorua.fish for the shells it finds. It is idempotent. A new terminal is required afterwards.
+Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/uninstall.sh | sh -s -- --purge` (drop `--purge` to keep ~/.zorua). Account data is never deleted.
 
 ## Commands
 
@@ -59,19 +61,19 @@ Account names: letters, digits, `-` and `_`; they must not collide with a comman
 - `cx` is a shell FUNCTION, not an executable. It exists only in interactive shells that sourced the wrapper. In a non-interactive subprocess (typical for an agent tool call) use one of:
   - one-shot: `cx work exec "..."` after sourcing the wrapper, or
   - set the variable directly, which is all `cx use` does: `CODEX_HOME=~/.codex-work codex exec "..."`, or
-  - call the core: `python3 ~/.codex-switch/cx_core.py <command>` (read-only commands such as `ls`, `usage`, `binds`, `names`, `prompt` work this way; `use`/`off`/`bind` write shell statements to the file named by $CX_EVAL_FILE, which only the wrapper consumes).
+  - call the core: `python3 ~/.zorua/cx_core.py <command>` (read-only commands such as `ls`, `usage`, `binds`, `names`, `prompt` work this way; `use`/`off`/`bind` write shell statements to the file named by $CX_EVAL_FILE, which only the wrapper consumes).
 - `cx use` changes only the current shell. It will not persist across separate tool calls.
 - `cx add`, `cx login` and `cx setup` open a browser or wait for input (use `--device-auth` or `--no-login` for headless/non-interactive use). `cx setup` and `cx rm` prompts take defaults on EOF, so they will not hang on closed stdin.
-- To list account names non-interactively: `python3 ~/.codex-switch/cx_core.py names`.
+- To list account names non-interactively: `python3 ~/.zorua/cx_core.py names`.
 - Never print or upload `auth.json` contents. `cx` itself only decodes the email, plan and expiry from the id_token locally.
 
 ## Files and configuration
 
-    ~/.config/codex-switch/accounts.tsv   registered accounts: <name>\t<codex home>
-    ~/.config/codex-switch/claude-accounts.tsv  Claude Code accounts: <name>\t<config dir>
-    ~/.config/codex-switch/bindings.tsv   directory bindings:  <name>\t<absolute path>  (longest-prefix match, per tool)
+    ~/.config/zorua/accounts.tsv   registered accounts: <name>\t<codex home>
+    ~/.config/zorua/claude-accounts.tsv  Claude Code accounts: <name>\t<config dir>
+    ~/.config/zorua/bindings.tsv   directory bindings:  <name>\t<absolute path>  (longest-prefix match, per tool)
     ~/.codex, ~/.codex-<name>/            per-account Codex homes (auth.json, sessions, config)
-    ~/.codex-switch/                      installed program and wrappers
+    ~/.zorua/                      installed program and wrappers
 
 Environment variables: CX_CONFIG_DIR (registry location), CX_HOME (install dir), NO_COLOR (disable colors), CX_COLOR=always (force colors), CX_AUTO_ACTIVE (internal binding state).
 On first run `default` is seeded and any ~/.codex-* directory that already contains an auth.json is registered automatically.
