@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Zorua — many accounts, one terminal each</title>
+<link rel="icon" type="image/svg+xml" href="assets/zorua-icon.svg">
 <link rel="alternate" type="text/plain" href="llms.txt" title="Agent-readable description">
 <meta name="description" content="Run different Codex CLI and Claude Code accounts in different terminals at the same time. One small Python program, works in zsh, bash and fish. No daemon.">
 <style>
@@ -41,6 +42,7 @@ footer{margin-top:56px;color:var(--dim);font-size:.82rem}
 </head>
 <body>
 <main>
+  <img src="assets/zorua-icon.svg" width="72" height="72" alt="Zorua: a fox with a ghost afterimage of itself" style="display:block;margin-bottom:14px">
   <div class="tag">$ zorua version → Zorua 0.5.0</div>
   <h1>Many accounts.<br><span>One terminal each.</span></h1>
   <p>Zorua keeps your Codex CLI and Claude Code accounts apart. Works in zsh, bash and fish. Every account gets its own <code>CODEX_HOME</code> or <code>CLAUDE_CONFIG_DIR</code>, so four panes can run four sign-ins at once. No daemon, no proxy, nothing to restart.</p>
@@ -122,7 +124,10 @@ window 3  <span class="g">client-acme</span></pre>
 <span class="g">$</span> zorua work exec "explain this repo"
 <span class="g">$</span> zorua bind work         <span class="d"># auto-switch in this directory</span></pre></div>
 
-  <footer>Formerly CodeX Switch · MIT · zsh, bash or fish · Python 3.8+ · requires the official Codex CLI · <code>zorua usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
+  <h2>why zorua</h2>
+  <p>Zorua is the illusion fox of the Pokémon games: it takes on the appearance of other creatures, so what you see is not always what is really there. That is the trick this tool plays on your terminals. One machine, one login session, and every window shows up as a different account: work in one pane, personal in the next, a client's team plan in a third, each with its own sign-in, history and quota. The icon is an original drawing, not Pokémon artwork; the name is only a nod, and this is an independent project.</p>
+
+  <footer>Formerly CodeX Switch · MIT · zsh, bash or fish · Python 3.8+ · works with the official Codex CLI and/or Claude Code · <code>zorua usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
 </main>
 <script>
 document.getElementById('copy').addEventListener('click',function(e){var b=e.currentTarget;navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1500)}).catch(function(){})});
