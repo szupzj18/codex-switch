@@ -895,8 +895,39 @@ def hook_script():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cx_statusline.py")
 
 
+def _shell_path(path):
+    """Quote a path for the status-line command; keep it portable as "$HOME/..." when under HOME."""
+    if path.startswith(HOME + "/"):
+        return '"$HOME/%s"' % path[len(HOME) + 1:].replace('"', '\\"')
+    return shlex.quote(path)
+
+
+def wrap_status_command(orig):
+    """Status-line command that relays through cx_statusline.py but falls back to
+    `orig` if the relay (or python3) is missing, e.g. on another machine or after
+    cx was uninstalled, so the status line never breaks."""
+    script = _shell_path(hook_script())
+    guard = "[ -f %s ] && command -v python3 >/dev/null 2>&1" % script
+    if not orig:
+        return "if %s; then python3 %s; fi" % (guard, script)
+    return ("__cx_orig=%s; if %s; then python3 %s -- \"$__cx_orig\"; else sh -c \"$__cx_orig\"; fi"
+            % (shlex.quote(orig), guard, script))
+
+
 def unwrap_status_command(cmd):
-    """If `cmd` is our relay, return the wrapped original command ('' if none); else None."""
+    """If `cmd` is our relay, return the wrapped original command ('' if none); else None.
+
+    Understands the current format and the first (0.3.1) one: python3 <script> -- <orig>.
+    """
+    if cmd.startswith("__cx_orig="):
+        try:
+            tok = shlex.split(cmd)[0]
+        except (ValueError, IndexError):
+            return None
+        tok = tok[len("__cx_orig="):]
+        return tok[:-1] if tok.endswith(";") else tok
+    if cmd.startswith("if [ -f ") and "cx_statusline.py" in cmd and cmd.rstrip().endswith("; fi"):
+        return ""
     try:
         parts = shlex.split(cmd)
     except ValueError:
@@ -909,23 +940,7 @@ def unwrap_status_command(cmd):
     return None
 
 
-def wrap_status_command(orig):
-    base = "python3 %s" % shlex.quote(hook_script())
-    return "%s -- %s" % (base, shlex.quote(orig)) if orig else base
-
-
-def cmd_hook(args):
-    """cx hook install|remove|status <claude account> [--dry-run]"""
-    usage = "usage: cx hook install|remove|status <claude-account> [--dry-run] [--yes]"
-    dry, yes = "--dry-run" in args, "--yes" in args
-    args = [a for a in args if a not in ("--dry-run", "--yes")]
-    if len(args) != 2 or args[0] not in ("install", "remove", "status"):
-        err(usage)
-        return 1
-    action, name = args
-    if kind_of(name) != "claude":
-        err("cx: '%s' is not a Claude account (cx add --claude <name>)" % name)
-        return 1
+def hook_one(action, name, dry=False, yes=False):
     home = registry("claude")[name]
     path = os.path.realpath(os.path.join(home, "settings.json"))
     try:
@@ -953,11 +968,16 @@ def cmd_hook(args):
 
     if action == "install":
         if orig is not None:
-            print("already installed for %s" % name)
-            return 0
-        new_cmd = wrap_status_command(cur)
-        new_sl = dict(sl, type="command", command=new_cmd)
-        if not cur:
+            new_cmd = wrap_status_command(orig)
+            if new_cmd == cur:
+                print("already installed for %s" % name)
+                return 0
+            print("updating the relay command for %s to the current (portable, self-healing) form" % name)
+            new_sl = dict(sl, type="command", command=new_cmd)
+        else:
+            new_cmd = wrap_status_command(cur)
+            new_sl = dict(sl, type="command", command=new_cmd)
+        if orig is None and not cur:
             print("note: '%s' has no status line. Installing adds a minimal one (model, context, 5h/7d)." % name)
             print("      Claude Code hides most footer keyboard hints (esc to interrupt, ? for shortcuts)")
             print("      while any status line is configured. 'cx hook remove %s' undoes this." % name)
@@ -1004,6 +1024,51 @@ def cmd_hook(args):
     return 0
 
 
+def cmd_hook(args):
+    """cx hook install|remove|status [<claude account>|--all] [--dry-run] [--yes]"""
+    usage = "usage: cx hook install|remove <claude-account> [--dry-run] [--yes] | cx hook remove --all | cx hook status [<claude-account>]"
+    dry, yes, every = "--dry-run" in args, "--yes" in args, "--all" in args
+    args = [a for a in args if a not in ("--dry-run", "--yes", "--all")]
+    if not args or args[0] not in ("install", "remove", "status") or len(args) > 2:
+        err(usage)
+        return 1
+    action = args[0]
+    names = [n for n, _ in claude_accounts()]
+    if len(args) == 1:
+        if action == "status" or (action == "remove" and every):
+            targets = names
+        else:
+            err(usage)
+            return 1
+    else:
+        if kind_of(args[1]) != "claude":
+            err("cx: '%s' is not a Claude account (cx add --claude <name>)" % args[1])
+            return 1
+        targets = [args[1]]
+    rc = 0
+    for i, name in enumerate(targets):
+        if len(args) == 1:
+            print("[%s]" % name)
+        if action == "remove" and every and not hook_installed(name):
+            print("not installed")
+            continue
+        rc = hook_one(action, name, dry, yes) or rc
+    if not targets:
+        print("(no Claude accounts)")
+    return rc
+
+
+def hook_installed(name):
+    """True when the account's status-line command is our relay."""
+    home = registry("claude")[name]
+    try:
+        with open(os.path.realpath(os.path.join(home, "settings.json"))) as f:
+            sl = json.load(f).get("statusLine")
+    except Exception:
+        return False
+    return isinstance(sl, dict) and unwrap_status_command(sl.get("command", "") or "") is not None
+
+
 HELP = """  cx                         list accounts, emails, plan and subscription expiry
   cx setup                   interactive first-run wizard (adopt homes, sign in, add, bind)
   cx usage [-v]              live limits (5h/7d bars); -v = detailed blocks (also: cx ls -v)
@@ -1022,8 +1087,9 @@ HELP = """  cx                         list accounts, emails, plan and subscript
   cx unbind [dir]            remove a directory binding (default: current dir)
   cx binds                   list project bindings
   cx hook install <claude>   relay Claude Code's status-line rate_limits into a cache so
-                             cx usage can show 5h/7d (also: hook remove|status, --dry-run;
-                             an account with no status line needs --yes or a confirmation)
+                             cx usage can show 5h/7d (also: hook remove <name>|--all,
+                             hook status [name], --dry-run; an account with no status
+                             line needs --yes or a confirmation)
   cx prompt                  print the prompt marker (also in $CX_PROMPT_TEXT)
   cx version                 print CodeX Switch version
 """
