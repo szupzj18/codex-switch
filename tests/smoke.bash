@@ -189,6 +189,21 @@ cx hook remove u1 >/dev/null
 python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['statusLine']['command']=='echo hi', d" "$U1/settings.json" || die "remove must restore the original command"
 if cx hook install work 2>/dev/null; then die "hook only for claude accounts"; fi
 cx rm u1 --purge >/dev/null
+
+# account WITHOUT a status line: explicit confirmation, minimal default line, clean removal
+cx add --claude u2 >/dev/null
+U2="$HOME/.claude-u2"
+echo '{"theme":"dark"}' > "$U2/settings.json"
+out=$(cx hook install u2 --dry-run)
+contains "$out" "hides most footer keyboard hints" "no-statusline notice"
+if cx hook install u2 </dev/null >/dev/null 2>&1; then die "must refuse without --yes when not on a tty"; fi
+not_contains "$(cat "$U2/settings.json")" "cx_statusline" "refused install must not write"
+cx hook install u2 --yes >/dev/null
+line=$(echo "{\"model\":{\"display_name\":\"Opus\"},\"context_window\":{\"used_percentage\":8},\"rate_limits\":{\"five_hour\":{\"used_percentage\":42,\"resets_at\":$((NOW + 3600))}}}" | CLAUDE_CONFIG_DIR="$U2" bash -c "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['statusLine']['command'])" "$U2/settings.json")")
+[ "$line" = "Opus · ctx 8% · 5h 42%" ] || die "default status line: $line"
+cx hook remove u2 >/dev/null
+python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert 'statusLine' not in d and d['theme']=='dark', d" "$U2/settings.json" || die "remove must delete the status line we added"
+cx rm u2 --purge >/dev/null
 export PATH=$OLDPATH
 ok "hook install / remove restores the original status line"
 

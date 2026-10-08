@@ -9,6 +9,8 @@ original status-line command with the very same stdin and stdout.
 
     python3 cx_statusline.py -- '<original status-line command>'
 
+When the account had no status line, it prints a minimal one (model, context, 5h/7d).
+
 It reads no credentials and talks to no network. Failures to write the cache
 never affect the status line.
 """
@@ -40,6 +42,27 @@ def save(data):
         pass
 
 
+def default_line(data):
+    """Minimal status line for accounts that had none: model, context, 5h / 7d."""
+    try:
+        d = json.loads(data)
+    except Exception:
+        return ""
+    parts = []
+    name = (d.get("model") or {}).get("display_name")
+    if name:
+        parts.append(str(name))
+    ctx = (d.get("context_window") or {}).get("used_percentage")
+    if ctx is not None:
+        parts.append("ctx %d%%" % round(float(ctx)))
+    rl = d.get("rate_limits") or {}
+    for key, label in (("five_hour", "5h"), ("seven_day", "7d")):
+        pct = (rl.get(key) or {}).get("used_percentage")
+        if pct is not None:
+            parts.append("%s %d%%" % (label, round(float(pct))))
+    return " · ".join(parts)
+
+
 def main():
     data = sys.stdin.buffer.read()
     save(data)
@@ -47,6 +70,7 @@ def main():
     if argv[:1] == ["--"]:
         argv = argv[1:]
     if not argv or not argv[0].strip():
+        print(default_line(data))
         return 0
     return subprocess.run(argv[0], shell=True, input=data).returncode
 

@@ -58,6 +58,10 @@ Things worth knowing:
   data only exists after the account has been used once with the relay installed.
   `cx hook install alt --dry-run` previews the change, a backup of `settings.json`
   is written first, and `cx hook remove alt` restores the original command.
+  If the account has no status line yet, the relay shows a minimal one (model,
+  context, 5h/7d). Claude Code hides most footer keyboard hints while any status
+  line is configured, so `cx hook install` then asks for confirmation (or `--yes`)
+  and `cx hook remove` deletes the line again.
 - Only subscription (claude.ai) logins are isolated per directory. A Console
   sign-in without an API key is stored outside the config directory and is
   shared. Phase 1 does not manage third-party providers or API keys.

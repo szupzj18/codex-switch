@@ -40,7 +40,7 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/m
     cx add --claude <name>     create a Claude Code subscription account (home ~/.claude-<name>) and run `claude auth login`
         --home DIR / --no-login also apply; --device-auth does not (Codex only)
     cx hook install|remove|status <claude-account> [--dry-run]
-                               wrap that account's Claude Code status-line command in a relay that caches rate_limits (5h/7d, claude.ai Pro/Max) to <config dir>/.cx-usage.json so `cx usage` can show them; reads no credentials, original command is preserved, settings.json is backed up
+                               wrap that account's Claude Code status-line command in a relay that caches rate_limits (5h/7d, claude.ai Pro/Max) to <config dir>/.cx-usage.json so `cx usage` can show them; reads no credentials, original command is preserved, settings.json is backed up. If the account has NO status line, install adds a minimal one and requires --yes (or an interactive confirmation) because Claude Code hides most footer keyboard hints while a status line is configured; remove deletes it again
     cx login <name>            (re)run `codex login` (or `claude auth login`) for one account
     cx use <name>              set CODEX_HOME (Codex account) or CLAUDE_CONFIG_DIR (Claude account) for THIS shell only
     cx use -   |  cx off       clear the switch (back to the default account ~/.codex)

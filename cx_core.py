@@ -905,9 +905,9 @@ def wrap_status_command(orig):
 
 def cmd_hook(args):
     """cx hook install|remove|status <claude account> [--dry-run]"""
-    usage = "usage: cx hook install|remove|status <claude-account> [--dry-run]"
-    dry = "--dry-run" in args
-    args = [a for a in args if a != "--dry-run"]
+    usage = "usage: cx hook install|remove|status <claude-account> [--dry-run] [--yes]"
+    dry, yes = "--dry-run" in args, "--yes" in args
+    args = [a for a in args if a not in ("--dry-run", "--yes")]
     if len(args) != 2 or args[0] not in ("install", "remove", "status"):
         err(usage)
         return 1
@@ -946,6 +946,10 @@ def cmd_hook(args):
             return 0
         new_cmd = wrap_status_command(cur)
         new_sl = dict(sl, type="command", command=new_cmd)
+        if not cur:
+            print("note: '%s' has no status line. Installing adds a minimal one (model, context, 5h/7d)." % name)
+            print("      Claude Code hides most footer keyboard hints (esc to interrupt, ? for shortcuts)")
+            print("      while any status line is configured. 'cx hook remove %s' undoes this." % name)
     else:
         if orig is None:
             print("not installed for %s" % name)
@@ -962,6 +966,13 @@ def cmd_hook(args):
     if dry:
         print("(dry run, nothing written)")
         return 0
+    if action == "install" and not cur and not yes:
+        if not sys.stdin.isatty():
+            err("cx: refusing to add a status line without confirmation (re-run with --yes)")
+            return 1
+        if not confirm("Add a minimal status line to '%s'?" % name, "n"):
+            print("cancelled")
+            return 1
     import shutil
     if os.path.exists(path):
         backup = "%s.cx-bak-%d" % (path, int(time.time()))
@@ -1000,7 +1011,8 @@ HELP = """  cx                         list accounts, emails, plan and subscript
   cx unbind [dir]            remove a directory binding (default: current dir)
   cx binds                   list project bindings
   cx hook install <claude>   relay Claude Code's status-line rate_limits into a cache so
-                             cx usage can show 5h/7d (also: hook remove|status, --dry-run)
+                             cx usage can show 5h/7d (also: hook remove|status, --dry-run;
+                             an account with no status line needs --yes or a confirmation)
   cx prompt                  print the prompt marker (also in $CX_PROMPT_TEXT)
   cx version                 print CodeX Switch version
 """
