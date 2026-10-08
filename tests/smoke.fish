@@ -87,5 +87,20 @@ contains_str $one "FAKE_HOME=$HOME/.codex-work" "one-shot home"
 contains_str $one "ARGS=hello-world" "one-shot args"
 ok one-shot
 
+mkdir $tmp/cbin
+cp $root/tests/fake-claude $tmp/cbin/claude
+set -l oldpath $PATH
+set -gx PATH $tmp/cbin $PATH
+cx add --claude alt >/dev/null; or die "add --claude failed"
+contains_str (cx ls | string collect) claude@example.com "claude account listed"
+cx use alt >/dev/null 2>&1
+test "$CLAUDE_CONFIG_DIR" = "$HOME/.claude-alt"; or die "use alt did not set CLAUDE_CONFIG_DIR ($CLAUDE_CONFIG_DIR)"
+test "$CX_PROMPT_TEXT" = "[claude:alt]"; or die "prompt text: $CX_PROMPT_TEXT"
+cx use - >/dev/null
+test -z "$CLAUDE_CONFIG_DIR"; or die "use - did not clear CLAUDE_CONFIG_DIR"
+cx rm alt --purge >/dev/null
+set -gx PATH $oldpath
+ok "claude accounts"
+
 rm -rf $tmp
 echo "All $n fish smoke checks passed."

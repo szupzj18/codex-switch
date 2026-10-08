@@ -182,6 +182,20 @@ contains "$(<"$XDG_CONFIG_HOME/codex-switch/accounts.tsv")" "adopt	$HOME/.codex-
 out=$(cx setup </dev/null 2>&1) || die "setup must not fail on EOF"
 ok "cx setup adopts existing homes and survives EOF"
 
+# ---- 11. claude account through the zsh wrapper -------------------------------
+
+mkdir -p "$TMP/cbin"
+cp "$ROOT/tests/fake-claude" "$TMP/cbin/claude"
+PATH="$TMP/cbin:$PATH" cx add --claude alt >/dev/null
+contains "$(PATH="$TMP/cbin:$PATH" cx ls)" "claude@example.com" "claude account listed"
+cx use alt >/dev/null 2>&1
+[[ $CLAUDE_CONFIG_DIR == $HOME/.claude-alt ]] || die "cx use alt did not set CLAUDE_CONFIG_DIR"
+print -rn -- "$RPROMPT" | grep -q "claude:alt" || die "claude marker missing: $RPROMPT"
+cx use - >/dev/null
+[[ -z ${CLAUDE_CONFIG_DIR:-} ]] || die "cx use - did not clear CLAUDE_CONFIG_DIR"
+cx rm alt --purge >/dev/null
+ok "claude accounts work through the zsh wrapper"
+
 # ---- 9. version --------------------------------------------------------------
 
 out=$(cx version)

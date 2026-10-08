@@ -6,7 +6,7 @@
 #   PS1='$CX_PROMPT_TEXT \u@\h:\w\$ '
 
 CX_CORE="${CX_CORE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cx_core.py}"
-CX_AUTO_ACTIVE="" _CX_PRE_AUTO_HOME="" CX_PROMPT_KIND="" CX_PROMPT_NAME="" CX_PROMPT_TEXT=""
+CX_AUTO_ACTIVE="" _CX_PRE_AUTO_HOME="" CX_AUTO_CLAUDE="" _CX_PRE_AUTO_CLAUDE="" CX_PROMPT_KIND="" CX_PROMPT_NAME="" CX_PROMPT_TEXT=""
 _CX_BINDINGS="${CX_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/codex-switch}/bindings.tsv"
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -18,6 +18,7 @@ _cx_run() {
   local f rc
   f=$(mktemp "${TMPDIR:-/tmp}/cx.XXXXXX") || return 1
   CX_SHELL=bash CX_EVAL_FILE=$f CX_AUTO_ACTIVE=$CX_AUTO_ACTIVE CX_PRE_AUTO_HOME=$_CX_PRE_AUTO_HOME \
+    CX_AUTO_CLAUDE=$CX_AUTO_CLAUDE CX_PRE_AUTO_CLAUDE=$_CX_PRE_AUTO_CLAUDE \
     python3 "$CX_CORE" "$@"
   rc=$?
   if [ -s "$f" ]; then . "$f"; fi
@@ -31,7 +32,7 @@ cx() { _cx_run "$@"; }
 _cx_prompt_hook() {
   if [ "$PWD" != "${_CX_LAST_PWD:-}" ]; then
     _CX_LAST_PWD=$PWD
-    if [ -s "$_CX_BINDINGS" ] || [ -n "$CX_AUTO_ACTIVE" ]; then
+    if [ -s "$_CX_BINDINGS" ] || [ -n "$CX_AUTO_ACTIVE" ] || [ -n "$CX_AUTO_CLAUDE" ]; then
       _cx_run apply "$PWD"
     fi
   fi
