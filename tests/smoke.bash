@@ -206,6 +206,45 @@ line=$(echo "{\"model\":{\"display_name\":\"Opus\"},\"context_window\":{\"used_p
 cx hook remove u2 >/dev/null
 python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert 'statusLine' not in d and d['theme']=='dark', d" "$U2/settings.json" || die "remove must delete the status line we added"
 cx rm u2 --purge >/dev/null
+
+# portable + self-healing relay command, legacy format, remove --all
+INST="$HOME/.cxinst"; mkdir -p "$INST"
+cp "$ROOT/cx_core.py" "$ROOT/cx_statusline.py" "$INST/"
+cx add --claude u3 >/dev/null
+U3="$HOME/.claude-u3"
+printf '{"statusLine":{"type":"command","command":"cat >/dev/null; echo orig-line"}}' > "$U3/settings.json"
+python3 "$INST/cx_core.py" hook install u3 >/dev/null
+cmd=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['statusLine']['command'])" "$U3/settings.json")
+contains "$cmd" '"$HOME/.cxinst/cx_statusline.py"' "script path is written as \$HOME-relative"
+not_contains "$cmd" "$HOME" "no absolute home directory in the command"
+[ "$(echo '{}' | sh -c "$cmd")" = "orig-line" ] || die "relay run must still print the original output"
+rm "$INST/cx_statusline.py"
+[ "$(echo '{}' | sh -c "$cmd")" = "orig-line" ] || die "missing relay must fall back to the original command"
+cp "$ROOT/cx_statusline.py" "$INST/"
+# a settings.json written by 0.3.1 (python3 <abs script> -- <orig>) is recognised and upgraded
+printf '{"statusLine":{"type":"command","command":"python3 %s -- %s"}}' "$INST/cx_statusline.py" "'cat >/dev/null; echo orig-line'" > "$U3/settings.json"
+contains "$(python3 "$INST/cx_core.py" hook status u3)" "installed" "legacy command recognised"
+contains "$(python3 "$INST/cx_core.py" hook install u3)" "updating the relay command" "legacy command upgraded"
+contains "$(python3 "$INST/cx_core.py" hook status)" "[u3]" "status lists all Claude accounts"
+python3 "$INST/cx_core.py" hook remove --all >/dev/null
+python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['statusLine']['command']=='cat >/dev/null; echo orig-line', d" "$U3/settings.json" || die "remove --all must restore the original command"
+cx rm u3 --purge >/dev/null
+rm -rf "$INST"
+
+# uninstall.sh: note without --purge, restore with --purge
+INST="$HOME/.codex-switch"; mkdir -p "$INST"
+cp "$ROOT/cx_core.py" "$ROOT/cx_statusline.py" "$INST/"
+cx add --claude u4 >/dev/null
+U4="$HOME/.claude-u4"
+printf '{"statusLine":{"type":"command","command":"echo keep-me"}}' > "$U4/settings.json"
+python3 "$INST/cx_core.py" hook install u4 >/dev/null
+out=$(sh "$ROOT/uninstall.sh" 2>&1)
+contains "$out" "still use the usage relay" "uninstall without --purge warns about active relays"
+[ -d "$INST" ] || die "uninstall without --purge must keep the files"
+sh "$ROOT/uninstall.sh" --purge >/dev/null 2>&1
+[ ! -d "$INST" ] || die "--purge must delete the install dir"
+python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['statusLine']['command']=='echo keep-me', d" "$U4/settings.json" || die "--purge must restore the original status line first"
+cx rm u4 --purge >/dev/null
 export PATH=$OLDPATH
 ok "hook install / remove restores the original status line"
 

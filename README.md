@@ -62,6 +62,11 @@ Things worth knowing:
   context, 5h/7d). Claude Code hides most footer keyboard hints while any status
   line is configured, so `cx hook install` then asks for confirmation (or `--yes`)
   and `cx hook remove` deletes the line again.
+  The command is written so it keeps working when settings are shared between
+  machines (the script path uses `$HOME`) and it falls back to your original
+  command if the relay or python3 is missing, so a status line never breaks.
+  `cx hook status` lists every Claude account, `cx hook remove --all` restores
+  them all, and `sh uninstall.sh --purge` does that automatically.
 - Only subscription (claude.ai) logins are isolated per directory. A Console
   sign-in without an API key is stored outside the config directory and is
   shared. Phase 1 does not manage third-party providers or API keys.
