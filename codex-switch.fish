@@ -49,6 +49,6 @@ end
 _cx_run apply $PWD
 
 complete -c cx -f
-complete -c cx -n '__fish_use_subcommand' -a 'ls usage setup use login off add rm bind unbind binds prompt version help'
+complete -c cx -n '__fish_use_subcommand' -a 'ls usage setup use login off add rm bind unbind binds hook prompt version help'
 complete -c cx -n '__fish_use_subcommand' -a '(CX_SHELL=fish python3 $CX_CORE names 2>/dev/null)'
 complete -c cx -n '__fish_seen_subcommand_from use login bind rm' -a '(CX_SHELL=fish python3 $CX_CORE names 2>/dev/null)'

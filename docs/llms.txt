@@ -39,6 +39,8 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/codex-switch/m
         --home DIR               register an existing directory instead of ~/.codex-<name>
     cx add --claude <name>     create a Claude Code subscription account (home ~/.claude-<name>) and run `claude auth login`
         --home DIR / --no-login also apply; --device-auth does not (Codex only)
+    cx hook install|remove|status <claude-account> [--dry-run]
+                               wrap that account's Claude Code status-line command in a relay that caches rate_limits (5h/7d, claude.ai Pro/Max) to <config dir>/.cx-usage.json so `cx usage` can show them; reads no credentials, original command is preserved, settings.json is backed up
     cx login <name>            (re)run `codex login` (or `claude auth login`) for one account
     cx use <name>              set CODEX_HOME (Codex account) or CLAUDE_CONFIG_DIR (Claude account) for THIS shell only
     cx use -   |  cx off       clear the switch (back to the default account ~/.codex)
@@ -81,5 +83,5 @@ On first run `default` is seeded and any ~/.codex-* directory that already conta
 - Output is plain text (no colors) when not a TTY.
 - `cx usage` sends each account's own access token to https://chatgpt.com/backend-api/wham/usage (the endpoint Codex itself uses) and nowhere else. If it fails it prints the reason, e.g. "token expired (run codex once to refresh)" or "network error: ... (check proxy)".
 - The EXPIRES column comes from the cached sign-in token and can be stale after a renewal (marked with a warning sign); the live limits are authoritative.
-- Claude Code accounts: account and plan come from `claude auth status`; usage limits are not available. `cx use` on a Claude account warns if ANTHROPIC_AUTH_TOKEN, ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, CLAUDE_CODE_USE_* or ANTHROPIC_BASE_URL is set, because they outrank or redirect the subscription login. Console sign-ins without an API key are stored outside the config directory and are not isolated.
+- Claude Code accounts: account and plan come from `claude auth status`. Usage windows come from the status-line relay cache (see `cx hook`), shown with their age; they only exist after the account has been used once with the relay installed. `cx use` on a Claude account warns if ANTHROPIC_AUTH_TOKEN, ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, CLAUDE_CODE_USE_* or ANTHROPIC_BASE_URL is set, because they outrank or redirect the subscription login. Console sign-ins without an API key are stored outside the config directory and are not isolated.
 - Not supported: API-key login, importing a token or auth.json with a single command, third-party Claude providers, Windows.

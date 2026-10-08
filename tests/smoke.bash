@@ -153,6 +153,45 @@ not_contains "$(cx ls)" "claude@example.com" "rm unregisters claude account"
 export PATH=$OLDPATH
 ok "rm claude account"
 
+
+# ---- Claude usage via the status-line relay --------------------------------
+
+export PATH="$TMP/cbin:$PATH"
+cx add --claude u1 >/dev/null
+U1="$HOME/.claude-u1"
+out=$(cx usage)
+contains "$out" "no Claude usage yet" "hint when no cache exists"
+# the relay: caches rate_limits, passes stdin/stdout through to the wrapped command
+NOW=$(date +%s)
+JSON="{\"model\":{\"display_name\":\"X\"},\"rate_limits\":{\"five_hour\":{\"used_percentage\":42,\"resets_at\":$((NOW + 3600))},\"seven_day\":{\"used_percentage\":7.4,\"resets_at\":$((NOW + 200000))}}}"
+echo "$JSON" | CLAUDE_CONFIG_DIR="$U1" python3 "$ROOT/cx_statusline.py" -- 'cat | python3 -c "import sys,json;print(\"WRAPPED:\" + json.load(sys.stdin)[\"model\"][\"display_name\"])"' > "$TMP/relay.out"
+contains "$(cat "$TMP/relay.out")" "WRAPPED:X" "relay passes stdin through and returns the wrapped output"
+[ -f "$U1/.cx-usage.json" ] || die "relay did not write the cache"
+out=$(cx usage)
+contains "$out" " 42%" "5h used percent from cache"
+contains "$out" "  7%" "7d used percent from cache"
+contains "$out" "Claude usage as of" "age note"
+ok "claude usage from the status-line relay cache"
+
+# hook install / status / remove on a settings.json with an existing status line
+printf '{"statusLine":{"type":"command","command":"echo hi","padding":0},"theme":"dark"}' > "$U1/settings.json"
+out=$(cx hook install u1 --dry-run)
+contains "$out" "dry run" "dry run"
+contains "$(cat "$U1/settings.json")" '"echo hi"' "dry run must not write"
+cx hook install u1 >/dev/null
+contains "$(cat "$U1/settings.json")" "cx_statusline.py" "relay installed in settings"
+python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['theme']=='dark' and d['statusLine']['padding']==0, d" "$U1/settings.json" || die "other settings must be preserved"
+contains "$(cx hook status u1)" "installed" "status"
+contains "$(cx hook install u1)" "already installed" "idempotent"
+ls "$U1"/settings.json.cx-bak-* >/dev/null 2>&1 || die "backup missing"
+echo "$JSON" | CLAUDE_CONFIG_DIR="$U1" bash -c "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['statusLine']['command'])" "$U1/settings.json")" | grep -q '^hi$' || die "installed command must still run the original"
+cx hook remove u1 >/dev/null
+python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['statusLine']['command']=='echo hi', d" "$U1/settings.json" || die "remove must restore the original command"
+if cx hook install work 2>/dev/null; then die "hook only for claude accounts"; fi
+cx rm u1 --purge >/dev/null
+export PATH=$OLDPATH
+ok "hook install / remove restores the original status line"
+
 mkdir -p "$HOME/.codex-adopt"
 printf '{"tokens":{"id_token":"%s"}}' "$(mkjwt adopt@example.com)" > "$HOME/.codex-adopt/auth.json"
 out=$(printf 'y\nn\nn\nn\n' | PATH="$TMP/bin:$PATH" cx setup 2>&1)

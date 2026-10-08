@@ -59,7 +59,7 @@ _cx_complete() {
   local cur=${COMP_WORDS[COMP_CWORD]} names
   names=$(CX_SHELL=bash python3 "$CX_CORE" names 2>/dev/null)
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "ls usage setup use login off add rm bind unbind binds prompt version help $names" -- "$cur"))
+    COMPREPLY=($(compgen -W "ls usage setup use login off add rm bind unbind binds hook prompt version help $names" -- "$cur"))
   else
     case ${COMP_WORDS[1]} in
       use|login|bind|rm) COMPREPLY=($(compgen -W "$names" -- "$cur")) ;;

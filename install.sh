@@ -18,7 +18,7 @@ REPO_OWNER="szupzj18"
 REPO_NAME="codex-switch"
 BRANCH="main"
 INSTALL_DIR="${CX_HOME:-$HOME/.codex-switch}"
-FILES="cx_core.py codex-switch.zsh codex-switch.bash codex-switch.fish"
+FILES="cx_core.py cx_statusline.py codex-switch.zsh codex-switch.bash codex-switch.fish"
 MARK_BEGIN="# >>> codex-switch >>>"
 MARK_END="# <<< codex-switch <<<"
 
@@ -51,7 +51,7 @@ else
     mv "$INSTALL_DIR/$f.part" "$INSTALL_DIR/$f"
   done
 fi
-chmod +x "$INSTALL_DIR/cx_core.py"
+chmod +x "$INSTALL_DIR/cx_core.py" "$INSTALL_DIR/cx_statusline.py"
 
 # --- wire up shells ----------------------------------------------------------
 # add_block <rc file> <source line> <shell>: append a marked block once.

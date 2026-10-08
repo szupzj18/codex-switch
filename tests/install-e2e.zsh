@@ -42,7 +42,7 @@ print -r -- "$inst" | grep -q "added source block"
 [[ -f $UH/.zshrc ]] || die ".zshrc not created"
 grep -q '# >>> codex-switch >>>' "$UH/.zshrc" || die "marker begin missing"
 grep -q '# <<< codex-switch <<<' "$UH/.zshrc" || die "marker end missing"
-for f in cx_core.py codex-switch.zsh codex-switch.bash codex-switch.fish; do
+for f in cx_core.py cx_statusline.py codex-switch.zsh codex-switch.bash codex-switch.fish; do
   [[ -f $UH/.codex-switch/$f ]] || die "$f not installed"
 done
 grep -q '# >>> codex-switch >>>' "$UH/.bashrc" || die "bashrc block missing"
