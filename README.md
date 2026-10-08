@@ -1,6 +1,12 @@
-# Zorua
+<p align="center">
+  <img src="docs/assets/zorua-icon.svg" width="120" height="120" alt="Zorua: a fox with a ghost afterimage of itself">
+</p>
 
-**Parallel multi-account manager for the OpenAI Codex CLI and Claude Code — zsh, bash and fish.**
+<h1 align="center">Zorua</h1>
+
+<p align="center">
+  <b>Parallel multi-account manager for the OpenAI Codex CLI and Claude Code — zsh, bash and fish.</b>
+</p>
 
 > Zorua was called *CodeX Switch* (`codex-switch`, command `cx`) before 0.5.0. **The command is now `zorua`**;
 > `cx` no longer exists. To upgrade, run the installer again: it replaces the old `~/.zshrc`/`~/.bashrc` block,
@@ -32,6 +38,16 @@ $ zorua usage
 `zorua usage -v` expands each account into a block with its home directory,
 20-cell usage bars and credits. Colors only appear on a terminal (honors
 `NO_COLOR`; force with `ZORUA_COLOR=always`).
+
+## Why "Zorua"?
+
+Zorua is the illusion fox of the Pokémon games: it takes on the appearance of other
+creatures, so what you see is not always what is really there. That is the trick this
+tool plays on your terminals. One machine, one login session — and every window shows up
+as a different account: work in one pane, personal in the next, a client's team plan in
+a third, each with its own sign-in, history and quota, none of them aware of the others.
+The icon is an original drawing (a fox with a ghost afterimage of itself), not Pokémon
+artwork; the name is only a nod. See the note at the bottom.
 
 ## Claude Code accounts
 
