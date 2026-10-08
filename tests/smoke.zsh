@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # Zorua smoke test — runs entirely inside a temporary HOME.
-# It never touches the real ~/.codex*, CX registry, or invokes the real codex.
+# It never touches the real ~/.codex*, Zorua registry, or invokes the real codex.
 #
 #   zsh tests/smoke.zsh
 
@@ -55,7 +55,7 @@ print -f "$AUTH_FMT" "$(mkjwt three@example.com)" > "$HOME/.codex-3/auth.json"
 # ---- 2. Source under temp HOME: seeds default + discovers work/3 -------------
 
 source "$SCRIPT"
-out=$(cx ls)
+out=$(zorua ls)
 contains "$out" "default" "first-run seeding"
 contains "$out" "work" "first-run discovery"
 contains "$out" "3" "first-run numeric names"
@@ -71,40 +71,40 @@ claims = {"email": "work@example.com", "https://api.openai.com/auth": {
     "chatgpt_plan_type": "pro", "chatgpt_subscription_active_until": "2030-01-02T00:00:00+00:00"}}
 json.dump({"tokens": {"id_token": b({"alg": "none"}) + "." + b(claims) + ".sig"}}, open(sys.argv[1], "w"))
 PY
-out=$(cx ls)
+out=$(zorua ls)
 contains "$out" "pro" "plan decode"
 contains "$out" "2030-01-02" "expiry decode"
 not_contains "$out" $'\033' "no ANSI colors when not a TTY"
-out=$(cx ls -v)
+out=$(zorua ls -v)
 contains "$out" "~/.codex-work" "verbose view shows home paths"
 contains "$out" "exp 2030-01-02" "verbose view shows expiry"
-out=$(CX_COLOR=always cx ls)
-contains "$out" $'\033[' "CX_COLOR=always forces colors"
-ok "cx ls shows plan and subscription expiry"
+out=$(ZORUA_COLOR=always zorua ls)
+contains "$out" $'\033[' "ZORUA_COLOR=always forces colors"
+ok "zorua ls shows plan and subscription expiry"
 
 # ---- 3. add / use ------------------------------------------------------------
 
-fails cx add "bad name"
-fails cx add work
+fails zorua add "bad name"
+fails zorua add work
 SIDE="$TMP/side-home"
 mkdir "$SIDE"
-fails cx add dup --no-login --home "$HOME/.codex-work"   # already registered
-cx add side --no-login --home "$SIDE"
-out=$(cx ls)
+fails zorua add dup --no-login --home "$HOME/.codex-work"   # already registered
+zorua add side --no-login --home "$SIDE"
+out=$(zorua ls)
 contains "$out" "side" "add registers new account"
 
-cx use side
-[[ $CODEX_HOME == $SIDE ]] || die "cx use side did not set CODEX_HOME"
-cx use -
-[[ -z ${CODEX_HOME:-} ]] || die "cx use - did not clear CODEX_HOME"
-ok "cx add / cx use works"
+zorua use side
+[[ $CODEX_HOME == $SIDE ]] || die "zorua use side did not set CODEX_HOME"
+zorua use -
+[[ -z ${CODEX_HOME:-} ]] || die "zorua use - did not clear CODEX_HOME"
+ok "zorua add / zorua use works"
 
 # ---- 4. bind in non-interactive shell (direct apply on bind) -----------------
 
 PROJ="$TMP/proj/sub/deeper"
 mkdir -p "$PROJ"
 cd "$TMP/proj"
-cx bind side
+zorua bind side
 [[ $CODEX_HOME == $SIDE ]] || die "bind did not apply immediately"
 print -rn -- "$RPROMPT" | grep -q "codex:side:auto" || die "auto marker missing: $RPROMPT"
 ok "bind applies immediately with auto marker"
@@ -115,7 +115,7 @@ cd "$HOME"
 child=$(env -u CODEX_HOME ZDOTDIR="$HOME" HOME="$HOME" XDG_CONFIG_HOME="$TMP/config" \
   zsh -ic "
     source '$SCRIPT'
-    whence -w _cx | grep -q function || { echo FAIL_COMPLETION; exit 1 }
+    whence -w _zorua | grep -q function || { echo FAIL_COMPLETION; exit 1 }
     cd '$PROJ'
     [[ \$CODEX_HOME == '$SIDE' ]] || { echo FAIL_ENTER; exit 1 }
     print -rn -- \"\$RPROMPT\" | grep -q 'codex:side:auto' || { echo FAIL_MARKER; exit 1 }
@@ -123,7 +123,7 @@ child=$(env -u CODEX_HOME ZDOTDIR="$HOME" HOME="$HOME" XDG_CONFIG_HOME="$TMP/con
     [[ \$CODEX_HOME == '$SIDE' ]] || { echo FAIL_PREFIX; exit 1 }
     cd '$HOME'
     [[ -z \${CODEX_HOME:-} ]] || { echo FAIL_LEAVE; exit 1 }
-    [[ -z \$CX_AUTO_ACTIVE ]] || { echo FAIL_LEAVE_STATE; exit 1 }
+    [[ -z \$ZORUA_AUTO_ACTIVE ]] || { echo FAIL_LEAVE_STATE; exit 1 }
     echo CHPWD_OK
   " 2>&1)
 contains "$child" "CHPWD_OK" "interactive chpwd auto-switch
@@ -133,25 +133,25 @@ ok "chpwd switches on cd in, keeps on prefix match, restores on leave"
 # ---- 6. binds / unbind -------------------------------------------------------
 
 cd "$PROJ"
-out=$(cx binds)
+out=$(zorua binds)
 contains "$out" "side" "binds lists account"
 contains "$out" "$TMP/proj" "binds lists path"
-cx unbind "$TMP/proj"
+zorua unbind "$TMP/proj"
 [[ -z ${CODEX_HOME:-} ]] || die "unbind did not restore CODEX_HOME"
 ok "binds / unbind works"
 
 # ---- 7. rm keeps data by default, then --purge deletes -----------------------
 
 cd "$HOME"
-echo n | cx rm side >/dev/null
+echo n | zorua rm side >/dev/null
 [[ -d $SIDE ]] || die "rm should keep data directory without --purge"
-out=$(cx ls)
+out=$(zorua ls)
 not_contains "$out" "side" "rm unregisters"
-cx add side --no-login --home "$SIDE"
-cx rm side --purge
+zorua add side --no-login --home "$SIDE"
+zorua rm side --purge
 [[ ! -d $SIDE ]] || die "--purge did not delete data directory"
 ok "rm keeps data then --purge deletes"
-fails cx rm default
+fails zorua rm default
 ok "default account is protected"
 
 # ---- 8. one-shot invocation through a fake codex -----------------------------
@@ -163,42 +163,42 @@ echo "FAKE_CODEX_HOME=$CODEX_HOME"
 echo "ARGS=$*"
 SH
 chmod +x "$TMP/bin/codex"
-out=$(PATH="$TMP/bin:$PATH" cx work hello-world)
+out=$(PATH="$TMP/bin:$PATH" zorua work hello-world)
 contains "$out" "FAKE_CODEX_HOME=$HOME/.codex-work" "one-shot sets CODEX_HOME"
 contains "$out" "ARGS=hello-world" "one-shot forwards arguments"
 print -rn -- "$out" | grep -qx "FAKE_CODEX_HOME=$HOME/.codex-work" \
   || die "CODEX_HOME was not the only/expected value
 $out"
-ok "one-shot cx <account> invokes codex with correct CODEX_HOME and args"
+ok "one-shot zorua <account> invokes codex with correct CODEX_HOME and args"
 
 # ---- 10. setup wizard (scripted answers) --------------------------------------
 
 mkdir -p "$HOME/.codex-adopt"
 print -r -- '{"tokens":{"id_token":"x.eyJlbWFpbCI6ImFkb3B0QGV4YW1wbGUuY29tIn0.s"}}' > "$HOME/.codex-adopt/auth.json"
 # answers: register adopt=y, sign in default=n, add another=n, show usage=n
-out=$(printf 'y\nn\nn\nn\n' | cx setup 2>&1)
+out=$(printf 'y\nn\nn\nn\n' | zorua setup 2>&1)
 contains "$out" "Zorua setup" "setup banner"
 contains "$(<"$XDG_CONFIG_HOME/zorua/accounts.tsv")" "adopt	$HOME/.codex-adopt" "setup registers discovered home"
-out=$(cx setup </dev/null 2>&1) || die "setup must not fail on EOF"
-ok "cx setup adopts existing homes and survives EOF"
+out=$(zorua setup </dev/null 2>&1) || die "setup must not fail on EOF"
+ok "zorua setup adopts existing homes and survives EOF"
 
 # ---- 11. claude account through the zsh wrapper -------------------------------
 
 mkdir -p "$TMP/cbin"
 cp "$ROOT/tests/fake-claude" "$TMP/cbin/claude"
-PATH="$TMP/cbin:$PATH" cx add --claude alt >/dev/null
-contains "$(PATH="$TMP/cbin:$PATH" cx ls)" "claude@example.com" "claude account listed"
-cx use alt >/dev/null 2>&1
-[[ $CLAUDE_CONFIG_DIR == $HOME/.claude-alt ]] || die "cx use alt did not set CLAUDE_CONFIG_DIR"
+PATH="$TMP/cbin:$PATH" zorua add --claude alt >/dev/null
+contains "$(PATH="$TMP/cbin:$PATH" zorua ls)" "claude@example.com" "claude account listed"
+zorua use alt >/dev/null 2>&1
+[[ $CLAUDE_CONFIG_DIR == $HOME/.claude-alt ]] || die "zorua use alt did not set CLAUDE_CONFIG_DIR"
 print -rn -- "$RPROMPT" | grep -q "claude:alt" || die "claude marker missing: $RPROMPT"
-cx use - >/dev/null
-[[ -z ${CLAUDE_CONFIG_DIR:-} ]] || die "cx use - did not clear CLAUDE_CONFIG_DIR"
-cx rm alt --purge >/dev/null
+zorua use - >/dev/null
+[[ -z ${CLAUDE_CONFIG_DIR:-} ]] || die "zorua use - did not clear CLAUDE_CONFIG_DIR"
+zorua rm alt --purge >/dev/null
 ok "claude accounts work through the zsh wrapper"
 
 # ---- 9. version --------------------------------------------------------------
 
-out=$(cx version)
+out=$(zorua version)
 contains "$out" "Zorua" "version output"
 ok "version command"
 

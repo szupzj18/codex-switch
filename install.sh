@@ -10,15 +10,15 @@
 # ~/.zorua and wires up the shells it finds (zsh, bash, fish).
 #
 # Environment:
-#   CX_HOME  install destination (default: ~/.zorua)
+#   ZORUA_HOME  install destination (default: ~/.zorua)
 
 set -e
 
 REPO_OWNER="szupzj18"
 REPO_NAME="zorua"
 BRANCH="main"
-INSTALL_DIR="${CX_HOME:-$HOME/.zorua}"
-FILES="cx_core.py cx_statusline.py zorua.zsh zorua.bash zorua.fish"
+INSTALL_DIR="${ZORUA_HOME:-${CX_HOME:-$HOME/.zorua}}"
+FILES="zorua_core.py zorua_statusline.py zorua.zsh zorua.bash zorua.fish"
 MARK_BEGIN="# >>> zorua >>>"
 MARK_END="# <<< zorua <<<"
 # Zorua used to be called codex-switch; clean up what the old installer left behind.
@@ -40,7 +40,7 @@ fi
 # --- copy files --------------------------------------------------------------
 mkdir -p "$INSTALL_DIR"
 script_dir=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || script_dir=""
-if [ -n "$script_dir" ] && [ -f "$script_dir/cx_core.py" ]; then
+if [ -n "$script_dir" ] && [ -f "$script_dir/zorua_core.py" ]; then
   for f in $FILES; do cp "$script_dir/$f" "$INSTALL_DIR/$f"; done
   say "installed from local clone: $script_dir"
 else
@@ -55,7 +55,13 @@ else
     mv "$INSTALL_DIR/$f.part" "$INSTALL_DIR/$f"
   done
 fi
-chmod +x "$INSTALL_DIR/cx_core.py" "$INSTALL_DIR/cx_statusline.py"
+chmod +x "$INSTALL_DIR/zorua_core.py" "$INSTALL_DIR/zorua_statusline.py"
+
+# Files from before the command was renamed from cx to zorua.
+renamed_cmd=0
+for f in cx_core.py cx_statusline.py; do
+  if [ -f "$INSTALL_DIR/$f" ]; then rm -f "$INSTALL_DIR/$f"; renamed_cmd=1; fi
+done
 
 # --- migrate from the codex-switch name ----------------------------------------
 strip_legacy_block() {
@@ -143,8 +149,12 @@ if [ -z "$wired" ]; then
 fi
 
 # Claude accounts that used the usage relay still point at the old install path.
-if [ -d "$LEGACY_DIR" ] && command -v python3 >/dev/null 2>&1; then
-  python3 "$INSTALL_DIR/cx_core.py" hook refresh || true
+if command -v python3 >/dev/null 2>&1; then
+  python3 "$INSTALL_DIR/zorua_core.py" hook refresh || true
+fi
+if [ "$renamed_cmd" = 1 ] || [ -d "$LEGACY_DIR" ]; then
+  say ""
+  say "note: the command is now 'zorua' (it used to be 'cx'). Open a new terminal; the old name is gone."
 fi
 if [ -d "$LEGACY_DIR" ] && [ "$INSTALL_DIR" != "$LEGACY_DIR" ]; then
   say ""
@@ -162,4 +172,4 @@ else
 fi
 
 say ""
-say "done (shells:${wired:- none}). Open a new terminal, then run: cx setup   (or: cx help)"
+say "done (shells:${wired:- none}). Open a new terminal, then run: zorua setup   (or: zorua help)"

@@ -4,10 +4,10 @@
 Claude Code feeds the status-line command a JSON document on stdin. For claude.ai
 Pro/Max accounts it contains `rate_limits.five_hour` / `seven_day` (documented:
 https://code.claude.com/docs/en/statusline). This relay saves those windows to
-`$CLAUDE_CONFIG_DIR/.cx-usage.json` so `cx usage` can show them, then runs the
+`$CLAUDE_CONFIG_DIR/.zorua-usage.json` so `zorua usage` can show them, then runs the
 original status-line command with the very same stdin and stdout.
 
-    python3 cx_statusline.py -- '<original status-line command>'
+    python3 zorua_statusline.py -- '<original status-line command>'
 
 When the account had no status line, it prints a minimal one (model, context, 5h/7d).
 
@@ -33,7 +33,7 @@ def save(data):
             return
         out["updated_at"] = int(time.time())
         cfg = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
-        path = os.path.join(cfg, ".cx-usage.json")
+        path = os.path.join(cfg, ".zorua-usage.json")
         tmp = "%s.%d.tmp" % (path, os.getpid())
         with open(tmp, "w") as f:
             json.dump(out, f)

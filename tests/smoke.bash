@@ -8,7 +8,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/config"
-unset CODEX_HOME CX_AUTO_ACTIVE CLAUDE_CONFIG_DIR CX_AUTO_CLAUDE ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL
+unset CODEX_HOME ZORUA_AUTO_ACTIVE CLAUDE_CONFIG_DIR ZORUA_AUTO_CLAUDE ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL
 mkdir -p "$HOME"
 
 n=0
@@ -33,64 +33,64 @@ printf '{"tokens":{"id_token":"%s"}}' "$(mkjwt work@example.com)" > "$HOME/.code
 # bash is non-interactive here, so install the hook by hand afterwards
 source "$ROOT/zorua.bash"
 
-out=$(cx ls)
+out=$(zorua ls)
 contains "$out" "work@example.com" "discovers signed-in home"
 contains "$out" "pro" "plan column"
 contains "$out" "2030-01-02" "expiry column"
 not_contains "$out" $'\033' "no colors when piped"
-contains "$(cx ls -v)" "~/.codex-work" "verbose view"
+contains "$(zorua ls -v)" "~/.codex-work" "verbose view"
 not_contains "$out" "Claude Code" "no section headings while only codex accounts exist"
 ok "first run + ls"
 
-contains "$(cx version)" "Zorua" "version"
+contains "$(zorua version)" "Zorua" "version"
 ok "version"
 
 SIDE="$TMP/side-home"; mkdir "$SIDE"
-cx add side --no-login --home "$SIDE" >/dev/null
-contains "$(cx ls)" "side" "add registers"
-if cx add side 2>/dev/null; then die "duplicate add should fail"; fi
-if cx add "bad name" 2>/dev/null; then die "bad name should fail"; fi
-cx use side >/dev/null
+zorua add side --no-login --home "$SIDE" >/dev/null
+contains "$(zorua ls)" "side" "add registers"
+if zorua add side 2>/dev/null; then die "duplicate add should fail"; fi
+if zorua add "bad name" 2>/dev/null; then die "bad name should fail"; fi
+zorua use side >/dev/null
 [ "$CODEX_HOME" = "$SIDE" ] || die "use did not set CODEX_HOME"
-[ "$CX_PROMPT_TEXT" = "[codex:side]" ] || die "prompt text: $CX_PROMPT_TEXT"
-contains "$(cx prompt)" "[codex:side]" "cx prompt"
-cx use - >/dev/null
+[ "$ZORUA_PROMPT_TEXT" = "[codex:side]" ] || die "prompt text: $ZORUA_PROMPT_TEXT"
+contains "$(zorua prompt)" "[codex:side]" "zorua prompt"
+zorua use - >/dev/null
 [ -z "${CODEX_HOME:-}" ] || die "use - did not clear"
-[ -z "$CX_PROMPT_TEXT" ] || die "prompt text not cleared"
+[ -z "$ZORUA_PROMPT_TEXT" ] || die "prompt text not cleared"
 ok "add / use / prompt marker"
 
 PROJ="$TMP/proj/sub/deeper"; mkdir -p "$PROJ"
 cd "$TMP/proj"
-cx bind side >/dev/null
+zorua bind side >/dev/null
 [ "$CODEX_HOME" = "$SIDE" ] || die "bind did not apply"
-[ "$CX_PROMPT_TEXT" = "[codex:side:auto]" ] || die "auto marker: $CX_PROMPT_TEXT"
-cd "$HOME"; _cx_prompt_hook
+[ "$ZORUA_PROMPT_TEXT" = "[codex:side:auto]" ] || die "auto marker: $ZORUA_PROMPT_TEXT"
+cd "$HOME"; _zorua_prompt_hook
 [ -z "${CODEX_HOME:-}" ] || die "leaving bound dir did not restore"
-cd "$PROJ"; _cx_prompt_hook
+cd "$PROJ"; _zorua_prompt_hook
 [ "$CODEX_HOME" = "$SIDE" ] || die "entering subdir did not switch"
-[ "$CX_AUTO_ACTIVE" = side ] || die "auto state"
-cd "$HOME"; _cx_prompt_hook
-[ -z "${CODEX_HOME:-}" ] && [ -z "$CX_AUTO_ACTIVE" ] || die "state not cleared on leave"
+[ "$ZORUA_AUTO_ACTIVE" = side ] || die "auto state"
+cd "$HOME"; _zorua_prompt_hook
+[ -z "${CODEX_HOME:-}" ] && [ -z "$ZORUA_AUTO_ACTIVE" ] || die "state not cleared on leave"
 ok "bind + cd hook"
 
-cd "$PROJ"; _cx_prompt_hook
-contains "$(cx binds)" "$TMP/proj" "binds lists path"
-cx unbind "$TMP/proj" >/dev/null
+cd "$PROJ"; _zorua_prompt_hook
+contains "$(zorua binds)" "$TMP/proj" "binds lists path"
+zorua unbind "$TMP/proj" >/dev/null
 [ -z "${CODEX_HOME:-}" ] || die "unbind did not restore"
 cd "$HOME"
 ok "binds / unbind"
 
-cx rm side </dev/null >/dev/null
+zorua rm side </dev/null >/dev/null
 [ -d "$SIDE" ] || die "rm without --purge must keep data"
-cx add side --no-login --home "$SIDE" >/dev/null
-cx rm side --purge >/dev/null
+zorua add side --no-login --home "$SIDE" >/dev/null
+zorua rm side --purge >/dev/null
 [ ! -d "$SIDE" ] || die "--purge must delete"
-if cx rm default 2>/dev/null; then die "default is protected"; fi
+if zorua rm default 2>/dev/null; then die "default is protected"; fi
 ok "rm / --purge / default protected"
 
 mkdir "$TMP/bin"
 printf '#!/bin/sh\necho "FAKE_HOME=$CODEX_HOME"\necho "ARGS=$*"\n' > "$TMP/bin/codex"; chmod +x "$TMP/bin/codex"
-out=$(PATH="$TMP/bin:$PATH" cx work hello-world)
+out=$(PATH="$TMP/bin:$PATH" zorua work hello-world)
 contains "$out" "FAKE_HOME=$HOME/.codex-work" "one-shot home"
 contains "$out" "ARGS=hello-world" "one-shot args"
 ok "one-shot"
@@ -103,31 +103,31 @@ cp "$ROOT/tests/fake-claude" "$TMP/cbin/claude"
 OLDPATH=$PATH
 export PATH="$TMP/cbin:$PATH"
 
-cx add --claude alt >/dev/null
+zorua add --claude alt >/dev/null
 [ -f "$XDG_CONFIG_HOME/zorua/claude-accounts.tsv" ] || die "claude registry not written"
-out=$(cx ls)
+out=$(zorua ls)
 contains "$out" "claude@example.com" "claude account email from claude auth status"
 contains "$out" "max" "claude plan"
 contains "$out" "Claude Code" "claude accounts get their own section"
 contains "$out" "Codex" "codex accounts get their own section"
-if cx add --claude work 2>/dev/null; then die "name clash across kinds must fail"; fi
-if cx add --claude x --device-auth 2>/dev/null; then die "--device-auth is codex-only"; fi
+if zorua add --claude work 2>/dev/null; then die "name clash across kinds must fail"; fi
+if zorua add --claude x --device-auth 2>/dev/null; then die "--device-auth is codex-only"; fi
 ok "add --claude + ls (shared namespace)"
 
 ALT="$HOME/.claude-alt"
-warn=$(ANTHROPIC_AUTH_TOKEN=secret cx use alt 2>&1 >/dev/null) || true
+warn=$(ANTHROPIC_AUTH_TOKEN=secret zorua use alt 2>&1 >/dev/null) || true
 contains "$warn" "ANTHROPIC_AUTH_TOKEN" "override warning"
-cx use alt >/dev/null
+zorua use alt >/dev/null
 [ "$CLAUDE_CONFIG_DIR" = "$ALT" ] || die "use did not set CLAUDE_CONFIG_DIR"
 [ -z "${CODEX_HOME:-}" ] || die "claude use must not touch CODEX_HOME"
-[ "$CX_PROMPT_TEXT" = "[claude:alt]" ] || die "prompt: $CX_PROMPT_TEXT"
-cx use work >/dev/null
-[ "$CX_PROMPT_TEXT" = "[codex:work claude:alt]" ] || die "combined prompt: $CX_PROMPT_TEXT"
-cx use - >/dev/null
+[ "$ZORUA_PROMPT_TEXT" = "[claude:alt]" ] || die "prompt: $ZORUA_PROMPT_TEXT"
+zorua use work >/dev/null
+[ "$ZORUA_PROMPT_TEXT" = "[codex:work claude:alt]" ] || die "combined prompt: $ZORUA_PROMPT_TEXT"
+zorua use - >/dev/null
 [ -z "${CODEX_HOME:-}" ] && [ -z "${CLAUDE_CONFIG_DIR:-}" ] || die "use - must clear both"
 ok "use (claude) + combined prompt + override warning"
 
-out=$(ANTHROPIC_AUTH_TOKEN=secret ANTHROPIC_BASE_URL=http://127.0.0.1:1 cx alt hello)
+out=$(ANTHROPIC_AUTH_TOKEN=secret ANTHROPIC_BASE_URL=http://127.0.0.1:1 zorua alt hello)
 contains "$out" "FAKE_CLAUDE_DIR=$ALT" "one-shot claude dir"
 contains "$out" "TOKEN=unset" "one-shot strips ANTHROPIC_AUTH_TOKEN"
 contains "$out" "BASE=https://api.anthropic.com" "one-shot pins the official base url"
@@ -135,23 +135,23 @@ contains "$out" "ARGS=hello" "one-shot args"
 ok "claude one-shot cleans overrides"
 
 cd "$TMP/proj"
-cx bind alt >/dev/null
+zorua bind alt >/dev/null
 [ "$CLAUDE_CONFIG_DIR" = "$ALT" ] || die "claude bind did not apply"
-cx bind work >/dev/null
+zorua bind work >/dev/null
 [ "$CODEX_HOME" = "$HOME/.codex-work" ] || die "codex bind in same dir must coexist"
-[ "$CX_PROMPT_TEXT" = "[codex:work:auto claude:alt:auto]" ] || die "auto prompt: $CX_PROMPT_TEXT"
-cd "$HOME"; _cx_prompt_hook
+[ "$ZORUA_PROMPT_TEXT" = "[codex:work:auto claude:alt:auto]" ] || die "auto prompt: $ZORUA_PROMPT_TEXT"
+cd "$HOME"; _zorua_prompt_hook
 [ -z "${CLAUDE_CONFIG_DIR:-}" ] && [ -z "${CODEX_HOME:-}" ] || die "leaving must restore both"
-cd "$TMP/proj"; _cx_prompt_hook
+cd "$TMP/proj"; _zorua_prompt_hook
 [ "$CLAUDE_CONFIG_DIR" = "$ALT" ] || die "re-entering must switch claude again"
-cx unbind "$TMP/proj" >/dev/null
+zorua unbind "$TMP/proj" >/dev/null
 [ -z "${CLAUDE_CONFIG_DIR:-}" ] || die "unbind must restore"
 cd "$HOME"
 ok "claude + codex bindings coexist"
 
-cx rm alt --purge >/dev/null
+zorua rm alt --purge >/dev/null
 [ ! -d "$ALT" ] || die "purge must delete claude home"
-not_contains "$(cx ls)" "claude@example.com" "rm unregisters claude account"
+not_contains "$(zorua ls)" "claude@example.com" "rm unregisters claude account"
 export PATH=$OLDPATH
 ok "rm claude account"
 
@@ -159,17 +159,17 @@ ok "rm claude account"
 # ---- Claude usage via the status-line relay --------------------------------
 
 export PATH="$TMP/cbin:$PATH"
-cx add --claude u1 >/dev/null
+zorua add --claude u1 >/dev/null
 U1="$HOME/.claude-u1"
-out=$(cx usage)
+out=$(zorua usage)
 contains "$out" "no Claude usage yet" "hint when no cache exists"
 # the relay: caches rate_limits, passes stdin/stdout through to the wrapped command
 NOW=$(date +%s)
 JSON="{\"model\":{\"display_name\":\"X\"},\"rate_limits\":{\"five_hour\":{\"used_percentage\":42,\"resets_at\":$((NOW + 3600))},\"seven_day\":{\"used_percentage\":7.4,\"resets_at\":$((NOW + 200000))}}}"
-echo "$JSON" | CLAUDE_CONFIG_DIR="$U1" python3 "$ROOT/cx_statusline.py" -- 'cat | python3 -c "import sys,json;print(\"WRAPPED:\" + json.load(sys.stdin)[\"model\"][\"display_name\"])"' > "$TMP/relay.out"
+echo "$JSON" | CLAUDE_CONFIG_DIR="$U1" python3 "$ROOT/zorua_statusline.py" -- 'cat | python3 -c "import sys,json;print(\"WRAPPED:\" + json.load(sys.stdin)[\"model\"][\"display_name\"])"' > "$TMP/relay.out"
 contains "$(cat "$TMP/relay.out")" "WRAPPED:X" "relay passes stdin through and returns the wrapped output"
-[ -f "$U1/.cx-usage.json" ] || die "relay did not write the cache"
-out=$(cx usage)
+[ -f "$U1/.zorua-usage.json" ] || die "relay did not write the cache"
+out=$(zorua usage)
 contains "$out" " 42%" "5h used percent from cache"
 contains "$out" "  7%" "7d used percent from cache"
 contains "$out" "Claude usage as of" "age note"
@@ -177,74 +177,91 @@ ok "claude usage from the status-line relay cache"
 
 # hook install / status / remove on a settings.json with an existing status line
 printf '{"statusLine":{"type":"command","command":"echo hi","padding":0},"theme":"dark"}' > "$U1/settings.json"
-out=$(cx hook install u1 --dry-run)
+out=$(zorua hook install u1 --dry-run)
 contains "$out" "dry run" "dry run"
 contains "$(cat "$U1/settings.json")" '"echo hi"' "dry run must not write"
-cx hook install u1 >/dev/null
-contains "$(cat "$U1/settings.json")" "cx_statusline.py" "relay installed in settings"
+zorua hook install u1 >/dev/null
+contains "$(cat "$U1/settings.json")" "zorua_statusline.py" "relay installed in settings"
 python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['theme']=='dark' and d['statusLine']['padding']==0, d" "$U1/settings.json" || die "other settings must be preserved"
-contains "$(cx hook status u1)" "installed" "status"
-contains "$(cx hook install u1)" "already installed" "idempotent"
-ls "$U1"/settings.json.cx-bak-* >/dev/null 2>&1 || die "backup missing"
+contains "$(zorua hook status u1)" "installed" "status"
+contains "$(zorua hook install u1)" "already installed" "idempotent"
+ls "$U1"/settings.json.zorua-bak-* >/dev/null 2>&1 || die "backup missing"
 echo "$JSON" | CLAUDE_CONFIG_DIR="$U1" bash -c "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['statusLine']['command'])" "$U1/settings.json")" | grep -q '^hi$' || die "installed command must still run the original"
-cx hook remove u1 >/dev/null
+zorua hook remove u1 >/dev/null
 python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['statusLine']['command']=='echo hi', d" "$U1/settings.json" || die "remove must restore the original command"
-if cx hook install work 2>/dev/null; then die "hook only for claude accounts"; fi
-cx rm u1 --purge >/dev/null
+if zorua hook install work 2>/dev/null; then die "hook only for claude accounts"; fi
+zorua rm u1 --purge >/dev/null
 
 # account WITHOUT a status line: explicit confirmation, minimal default line, clean removal
-cx add --claude u2 >/dev/null
+zorua add --claude u2 >/dev/null
 U2="$HOME/.claude-u2"
 echo '{"theme":"dark"}' > "$U2/settings.json"
-out=$(cx hook install u2 --dry-run)
+out=$(zorua hook install u2 --dry-run)
 contains "$out" "hides most footer keyboard hints" "no-statusline notice"
-if cx hook install u2 </dev/null >/dev/null 2>&1; then die "must refuse without --yes when not on a tty"; fi
-not_contains "$(cat "$U2/settings.json")" "cx_statusline" "refused install must not write"
-cx hook install u2 --yes >/dev/null
+if zorua hook install u2 </dev/null >/dev/null 2>&1; then die "must refuse without --yes when not on a tty"; fi
+not_contains "$(cat "$U2/settings.json")" "zorua_statusline" "refused install must not write"
+zorua hook install u2 --yes >/dev/null
 line=$(echo "{\"model\":{\"display_name\":\"Opus\"},\"context_window\":{\"used_percentage\":8},\"rate_limits\":{\"five_hour\":{\"used_percentage\":42,\"resets_at\":$((NOW + 3600))}}}" | CLAUDE_CONFIG_DIR="$U2" bash -c "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['statusLine']['command'])" "$U2/settings.json")")
 [ "$line" = "Opus · ctx 8% · 5h 42%" ] || die "default status line: $line"
-cx hook remove u2 >/dev/null
+zorua hook remove u2 >/dev/null
 python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert 'statusLine' not in d and d['theme']=='dark', d" "$U2/settings.json" || die "remove must delete the status line we added"
-cx rm u2 --purge >/dev/null
+zorua rm u2 --purge >/dev/null
 
 # portable + self-healing relay command, legacy format, remove --all
-INST="$HOME/.cxinst"; mkdir -p "$INST"
-cp "$ROOT/cx_core.py" "$ROOT/cx_statusline.py" "$INST/"
-cx add --claude u3 >/dev/null
+INST="$HOME/.zoruainst"; mkdir -p "$INST"
+cp "$ROOT/zorua_core.py" "$ROOT/zorua_statusline.py" "$INST/"
+zorua add --claude u3 >/dev/null
 U3="$HOME/.claude-u3"
 printf '{"statusLine":{"type":"command","command":"cat >/dev/null; echo orig-line"}}' > "$U3/settings.json"
-python3 "$INST/cx_core.py" hook install u3 >/dev/null
+python3 "$INST/zorua_core.py" hook install u3 >/dev/null
 cmd=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['statusLine']['command'])" "$U3/settings.json")
-contains "$cmd" '"$HOME/.cxinst/cx_statusline.py"' "script path is written as \$HOME-relative"
+contains "$cmd" '"$HOME/.zoruainst/zorua_statusline.py"' "script path is written as \$HOME-relative"
 not_contains "$cmd" "$HOME" "no absolute home directory in the command"
 [ "$(echo '{}' | sh -c "$cmd")" = "orig-line" ] || die "relay run must still print the original output"
-rm "$INST/cx_statusline.py"
+rm "$INST/zorua_statusline.py"
 [ "$(echo '{}' | sh -c "$cmd")" = "orig-line" ] || die "missing relay must fall back to the original command"
-cp "$ROOT/cx_statusline.py" "$INST/"
+cp "$ROOT/zorua_statusline.py" "$INST/"
 # a settings.json written by 0.3.1 (python3 <abs script> -- <orig>) is recognised and upgraded
-printf '{"statusLine":{"type":"command","command":"python3 %s -- %s"}}' "$INST/cx_statusline.py" "'cat >/dev/null; echo orig-line'" > "$U3/settings.json"
-contains "$(python3 "$INST/cx_core.py" hook status u3)" "installed" "legacy command recognised"
-contains "$(python3 "$INST/cx_core.py" hook install u3)" "updating the relay command" "legacy command upgraded"
-contains "$(python3 "$INST/cx_core.py" hook status)" "[u3]" "status lists all Claude accounts"
-python3 "$INST/cx_core.py" hook remove --all >/dev/null
+printf '{"statusLine":{"type":"command","command":"python3 %s -- %s"}}' "$INST/zorua_statusline.py" "'cat >/dev/null; echo orig-line'" > "$U3/settings.json"
+contains "$(python3 "$INST/zorua_core.py" hook status u3)" "installed" "legacy command recognised"
+contains "$(python3 "$INST/zorua_core.py" hook install u3)" "updating the relay command" "legacy command upgraded"
+contains "$(python3 "$INST/zorua_core.py" hook status)" "[u3]" "status lists all Claude accounts"
+python3 "$INST/zorua_core.py" hook remove --all >/dev/null
 python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['statusLine']['command']=='cat >/dev/null; echo orig-line', d" "$U3/settings.json" || die "remove --all must restore the original command"
-cx rm u3 --purge >/dev/null
+zorua rm u3 --purge >/dev/null
 rm -rf "$INST"
 
 # uninstall.sh: note without --purge, restore with --purge
 INST="$HOME/.zorua"; mkdir -p "$INST"
-cp "$ROOT/cx_core.py" "$ROOT/cx_statusline.py" "$INST/"
-cx add --claude u4 >/dev/null
+cp "$ROOT/zorua_core.py" "$ROOT/zorua_statusline.py" "$INST/"
+zorua add --claude u4 >/dev/null
 U4="$HOME/.claude-u4"
 printf '{"statusLine":{"type":"command","command":"echo keep-me"}}' > "$U4/settings.json"
-python3 "$INST/cx_core.py" hook install u4 >/dev/null
+python3 "$INST/zorua_core.py" hook install u4 >/dev/null
 out=$(sh "$ROOT/uninstall.sh" 2>&1)
 contains "$out" "still use the usage relay" "uninstall without --purge warns about active relays"
 [ -d "$INST" ] || die "uninstall without --purge must keep the files"
 sh "$ROOT/uninstall.sh" --purge >/dev/null 2>&1
 [ ! -d "$INST" ] || die "--purge must delete the install dir"
 python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['statusLine']['command']=='echo keep-me', d" "$U4/settings.json" || die "--purge must restore the original status line first"
-cx rm u4 --purge >/dev/null
+zorua rm u4 --purge >/dev/null
+
+# pre-rename relay command / cache file names (0.4.0: cx_statusline.py, __cx_orig, .cx-usage.json) still work
+zorua add --claude u5 >/dev/null
+U5="$HOME/.claude-u5"
+OLDCMD='__cx_orig='"'"'echo old-orig'"'"'; if [ -f "$HOME/.zorua/cx_statusline.py" ] && command -v python3 >/dev/null 2>&1; then python3 "$HOME/.zorua/cx_statusline.py" -- "$__cx_orig"; else sh -c "$__cx_orig"; fi'
+python3 -c "import json,sys;json.dump({'statusLine':{'type':'command','command':sys.argv[2]}},open(sys.argv[1],'w'))" "$U5/settings.json" "$OLDCMD"
+contains "$(zorua hook status u5)" "installed" "0.4.0-format relay recognised"
+contains "$(zorua hook install u5)" "updating the relay command" "0.4.0-format relay upgraded"
+cmd=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['statusLine']['command'])" "$U5/settings.json")
+contains "$cmd" "zorua_statusline.py" "upgraded command uses the new script name"
+not_contains "$cmd" "cx_" "no cx names left in the upgraded command"
+zorua hook remove u5 >/dev/null
+python3 -c "import json,sys;assert json.load(open(sys.argv[1]))['statusLine']['command']=='echo old-orig'" "$U5/settings.json" || die "remove must restore the original from the old format"
+NOW2=$(date +%s)
+echo "{\"five_hour\":{\"used_percentage\":33,\"resets_at\":$((NOW2 + 3000))},\"updated_at\":$NOW2}" > "$U5/.cx-usage.json"
+contains "$(zorua usage)" " 33%" "legacy cache file name is still read"
+zorua rm u5 --purge >/dev/null
 export PATH=$OLDPATH
 ok "hook install / remove restores the original status line"
 
@@ -253,7 +270,7 @@ ok "hook install / remove restores the original status line"
 OLDCFG="$TMP/mig/config"; mkdir -p "$OLDCFG/codex-switch" "$TMP/mig/home/.codex-legacy"
 printf 'default\t%s\nlegacy\t%s\n' "$TMP/mig/home/.codex" "$TMP/mig/home/.codex-legacy" > "$OLDCFG/codex-switch/accounts.tsv"
 printf 'legacy\t%s\n' "$TMP/mig/proj" > "$OLDCFG/codex-switch/bindings.tsv"
-out=$(HOME="$TMP/mig/home" XDG_CONFIG_HOME="$OLDCFG" python3 "$ROOT/cx_core.py" ls)
+out=$(HOME="$TMP/mig/home" XDG_CONFIG_HOME="$OLDCFG" python3 "$ROOT/zorua_core.py" ls)
 contains "$out" "legacy" "accounts carried over from the old config dir"
 [ -f "$OLDCFG/zorua/bindings.tsv" ] || die "bindings not carried over"
 [ -f "$OLDCFG/codex-switch/accounts.tsv" ] || die "old config must be kept as a backup"
@@ -261,10 +278,10 @@ ok "registry migrated from ~/.config/codex-switch"
 
 mkdir -p "$HOME/.codex-adopt"
 printf '{"tokens":{"id_token":"%s"}}' "$(mkjwt adopt@example.com)" > "$HOME/.codex-adopt/auth.json"
-out=$(printf 'y\nn\nn\nn\n' | PATH="$TMP/bin:$PATH" cx setup 2>&1)
+out=$(printf 'y\nn\nn\nn\n' | PATH="$TMP/bin:$PATH" zorua setup 2>&1)
 contains "$out" "Zorua setup" "setup banner"
 contains "$(cat "$XDG_CONFIG_HOME/zorua/accounts.tsv")" "adopt" "setup registers"
-cx setup </dev/null >/dev/null 2>&1 || die "setup must survive EOF"
+zorua setup </dev/null >/dev/null 2>&1 || die "setup must survive EOF"
 ok "setup wizard"
 
 echo "All $n bash smoke checks passed."

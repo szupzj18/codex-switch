@@ -18,13 +18,13 @@ emulate -L zsh
 set -e
 setopt pipe_fail
 
-SRC="${CX_E2E_SRC:-/src}"
-E2E_USER="${CX_E2E_USER:-cxuser}"
-ZSH_BIN="${CX_E2E_ZSH:-$(whence -p zsh)}"
+SRC="${ZORUA_E2E_SRC:-/src}"
+E2E_USER="${ZORUA_E2E_USER:-zoruauser}"
+ZSH_BIN="${ZORUA_E2E_ZSH:-$(whence -p zsh)}"
 
 (( EUID == 0 )) || { print "this script must run as root (it creates a fresh user)" >&2; exit 2; }
 [[ -n $ZSH_BIN && -x $ZSH_BIN ]] || { print "zsh not found" >&2; exit 2; }
-[[ -f $SRC/install.sh ]] || { print "source tree not found at $SRC (set CX_E2E_SRC)" >&2; exit 2; }
+[[ -f $SRC/install.sh ]] || { print "source tree not found at $SRC (set ZORUA_E2E_SRC)" >&2; exit 2; }
 
 n=0
 ok() { n=$((n + 1)); print -P -- "%F{green}ok%f $1"; }
@@ -42,7 +42,7 @@ print -r -- "$inst" | grep -q "added source block"
 [[ -f $UH/.zshrc ]] || die ".zshrc not created"
 grep -q '# >>> zorua >>>' "$UH/.zshrc" || die "marker begin missing"
 grep -q '# <<< zorua <<<' "$UH/.zshrc" || die "marker end missing"
-for f in cx_core.py cx_statusline.py zorua.zsh zorua.bash zorua.fish; do
+for f in zorua_core.py zorua_statusline.py zorua.zsh zorua.bash zorua.fish; do
   [[ -f $UH/.zorua/$f ]] || die "$f not installed"
 done
 grep -q '# >>> zorua >>>' "$UH/.bashrc" || die "bashrc block missing"
@@ -57,6 +57,19 @@ print -r -- "$inst" | grep -q "already present"
 (( $(grep -c 'zorua >>>' $UH/.zshrc) == 1 )) || die "marker block duplicated"
 ok "second install does not duplicate the block"
 
+step "2b. re-running the installer after the cx -> zorua command rename"
+echo "stale" > "$UH/.zorua/cx_core.py"; echo "stale" > "$UH/.zorua/cx_statusline.py"
+chown "$E2E_USER" "$UH/.zorua/cx_core.py" "$UH/.zorua/cx_statusline.py"
+inst=$(su "$E2E_USER" -s "$ZSH_BIN" -c "sh $SRC/install.sh")
+[[ ! -e $UH/.zorua/cx_core.py && ! -e $UH/.zorua/cx_statusline.py ]] || die "stale cx_* files were not removed"
+print -r -- "$inst" | grep -q "the command is now 'zorua'" || die "rename notice missing"
+out=$(su "$E2E_USER" -s "$ZSH_BIN" -c "$ZSH_BIN -i -c 'whence -w cx; whence -w zorua'" 2>&1)
+print -r -- "$out" | grep -q "zorua: function" || die "zorua is not defined
+$out"
+! print -r -- "$out" | grep -q "cx: function" || die "the old cx command must be gone
+$out"
+ok "stale files removed, notice shown, only zorua is defined"
+
 step "3. fresh interactive zsh works + add/use + fake codex + bind/unbind"
 
 cat > "$UH/scenario.zsh" <<EOF
@@ -65,14 +78,14 @@ set -e
 
 export PATH="\$HOME/bin:\$PATH"
 
-cx version | grep -q "Zorua"
-out=\$(cx ls)
+zorua version | grep -q "Zorua"
+out=\$(zorua ls)
 print -rn -- "\$out" | grep -q default
 if print -rn -- "\$out" | grep -q demo; then echo FAIL_DEMO_PRESENT; exit 1; fi
 
-cx add demo --no-login
-if cx add demo 2>/dev/null; then echo FAIL_DUP_NAME; exit 1; fi
-cx ls | grep -q demo
+zorua add demo --no-login
+if zorua add demo 2>/dev/null; then echo FAIL_DUP_NAME; exit 1; fi
+zorua ls | grep -q demo
 
 # Fake codex: one-shot invocation must set CODEX_HOME and forward args
 mkdir -p \$HOME/bin
@@ -82,33 +95,33 @@ echo "FAKE_HOME=\$CODEX_HOME"
 echo "ARGS=\$*"
 SH
 chmod +x \$HOME/bin/codex
-out=\$(cx demo exec "hello-e2e")
+out=\$(zorua demo exec "hello-e2e")
 print -rn -- "\$out" | grep -q "FAKE_HOME=\$HOME/.codex-demo"
 print -rn -- "\$out" | grep -q "ARGS=exec hello-e2e"
 
-# cx use affects only this shell + prompt marker
-cx use demo
+# zorua use affects only this shell + prompt marker
+zorua use demo
 [[ \$CODEX_HOME == \$HOME/.codex-demo ]]
 print -rn -- "\$RPROMPT" | grep -q "codex:demo"
-cx use -
+zorua use -
 [[ -z \${CODEX_HOME:-} ]]
 
 # bind immediately applies; chpwd keeps on prefix match; leave restores
 mkdir -p \$HOME/work/api/sub
 cd \$HOME/work/api
-cx bind demo
+zorua bind demo
 [[ \$CODEX_HOME == \$HOME/.codex-demo ]]
 cd sub
-[[ \$CODEX_HOME == \$HOME/.codex-demo && \$CX_AUTO_ACTIVE == demo ]]
+[[ \$CODEX_HOME == \$HOME/.codex-demo && \$ZORUA_AUTO_ACTIVE == demo ]]
 cd \$HOME
-[[ -z \${CODEX_HOME:-} && -z \$CX_AUTO_ACTIVE ]]
+[[ -z \${CODEX_HOME:-} && -z \$ZORUA_AUTO_ACTIVE ]]
 
-cx binds | grep -q "/work/api"
-cx unbind \$HOME/work/api
+zorua binds | grep -q "/work/api"
+zorua unbind \$HOME/work/api
 [[ -z \${CODEX_HOME:-} ]]
 
-cx rm demo --purge
-! cx ls | grep -q demo
+zorua rm demo --purge
+! zorua ls | grep -q demo
 echo E2E_SCENARIO_OK
 EOF
 chown "$E2E_USER" "$UH/scenario.zsh"
@@ -124,21 +137,21 @@ step "3b. bash and fish wrappers work in a fresh interactive shell"
 cat > "$UH/scenario.bash" <<'EOF'
 set -e
 export PATH="$HOME/bin:$PATH"
-cx version | grep -q "Zorua"
-cx add demo2 --no-login >/dev/null
-cx use demo2 >/dev/null
+zorua version | grep -q "Zorua"
+zorua add demo2 --no-login >/dev/null
+zorua use demo2 >/dev/null
 [ "$CODEX_HOME" = "$HOME/.codex-demo2" ]
-[ "$CX_PROMPT_TEXT" = "[codex:demo2]" ]
-cx use - >/dev/null
+[ "$ZORUA_PROMPT_TEXT" = "[codex:demo2]" ]
+zorua use - >/dev/null
 [ -z "${CODEX_HOME:-}" ]
 mkdir -p "$HOME/bw"
 cd "$HOME/bw"
-cx bind demo2 >/dev/null
-cd "$HOME"; _cx_prompt_hook; cd "$HOME/bw"; _cx_prompt_hook
+zorua bind demo2 >/dev/null
+cd "$HOME"; _zorua_prompt_hook; cd "$HOME/bw"; _zorua_prompt_hook
 [ "$CODEX_HOME" = "$HOME/.codex-demo2" ]
-cd "$HOME"; _cx_prompt_hook
+cd "$HOME"; _zorua_prompt_hook
 [ -z "${CODEX_HOME:-}" ]
-cx rm demo2 --purge >/dev/null
+zorua rm demo2 --purge >/dev/null
 echo E2E_BASH_OK
 EOF
 chown "$E2E_USER" "$UH/scenario.bash"
@@ -148,21 +161,21 @@ $out"
 ok "bash wrapper: add/use/prompt/bind/hook/rm"
 if (( $+commands[fish] )); then
   cat > "$UH/scenario.fish" <<'EOF'
-cx version | grep -q "Zorua"; or exit 1
-cx add demo3 --no-login >/dev/null; or exit 1
-cx use demo3 >/dev/null
+zorua version | grep -q "Zorua"; or exit 1
+zorua add demo3 --no-login >/dev/null; or exit 1
+zorua use demo3 >/dev/null
 test "$CODEX_HOME" = "$HOME/.codex-demo3"; or begin; echo BAD_USE; exit 1; end
-cx use - >/dev/null
+zorua use - >/dev/null
 test -z "$CODEX_HOME"; or begin; echo BAD_CLEAR; exit 1; end
 mkdir -p $HOME/fw
 cd $HOME/fw
-cx bind demo3 >/dev/null
+zorua bind demo3 >/dev/null
 cd $HOME
 cd $HOME/fw
 test "$CODEX_HOME" = "$HOME/.codex-demo3"; or begin; echo BAD_BIND; exit 1; end
 cd $HOME
 test -z "$CODEX_HOME"; or begin; echo BAD_LEAVE; exit 1; end
-cx rm demo3 --purge >/dev/null
+zorua rm demo3 --purge >/dev/null
 echo E2E_FISH_OK
 EOF
   chown "$E2E_USER" "$UH/scenario.fish"
@@ -174,7 +187,7 @@ fi
 
 step "4. without python3 every wrapper explains what is missing"
 cat > "$UH/no-py.zsh" <<'EOF'
-cx ls
+zorua ls
 EOF
 chown "$E2E_USER" "$UH/no-py.zsh"
 out=$(su "$E2E_USER" -s "$ZSH_BIN" -c "PATH=/nonexistent $ZSH_BIN -i \$HOME/no-py.zsh" 2>&1) || true
@@ -198,7 +211,7 @@ $inst"
 ! grep -q 'codex-switch' "$OH/.zshrc" || die "legacy source line still in .zshrc"
 grep -q 'FOO=1' "$OH/.zshrc" || die "unrelated .zshrc content must survive"
 (( $(grep -c '# >>> zorua >>>' "$OH/.zshrc") == 1 )) || die "new block missing or duplicated"
-out=$(su "$OLD_USER" -s "$ZSH_BIN" -c "$ZSH_BIN -i -c 'cx ls'" 2>&1)
+out=$(su "$OLD_USER" -s "$ZSH_BIN" -c "$ZSH_BIN -i -c 'zorua ls'" 2>&1)
 print -r -- "$out" | grep -q "keep" || die "accounts were not carried over
 $out"
 [[ -d $OH/.config/codex-switch ]] || die "old config must be kept as a backup"
@@ -218,7 +231,7 @@ ok "uninstall.sh clean, data intact"
 step "6. syntax"
 zsh -n "$SRC/zorua.zsh"
 bash -n "$SRC/zorua.bash"
-python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$SRC/cx_core.py"
+python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$SRC/zorua_core.py"
 sh -n "$SRC/install.sh"
 sh -n "$SRC/uninstall.sh"
 if (( $+commands[fish] )); then fish -n "$SRC/zorua.fish"; fi

@@ -2,13 +2,13 @@
 # Zorua uninstaller (POSIX sh)
 #
 #   sh uninstall.sh           remove the rc source blocks (data kept)
-#   sh uninstall.sh --purge   also restore Claude status lines (cx hook remove --all)
+#   sh uninstall.sh --purge   also restore Claude status lines (zorua hook remove --all)
 #                             and delete the installed scripts
 #
 # Account data (~/.codex, ~/.codex-*) and the Zorua registry
 # (~/.config/zorua) are never deleted.
 
-INSTALL_DIR="${CX_HOME:-$HOME/.zorua}"
+INSTALL_DIR="${ZORUA_HOME:-${CX_HOME:-$HOME/.zorua}}"
 MARK_BEGIN="# >>> zorua >>>"
 MARK_END="# <<< zorua <<<"
 LEGACY_DIR="$HOME/.codex-switch"
@@ -51,8 +51,9 @@ fi
 [ "$found" = 1 ] || echo "no marker block found in zsh/bash/fish config"
 
 # Claude Code accounts may route their status line through the usage relay
-# (cx hook). Restore the original commands before the relay files go away.
-CORE="$INSTALL_DIR/cx_core.py"
+# (zorua hook). Restore the original commands before the relay files go away.
+CORE="$INSTALL_DIR/zorua_core.py"
+[ -f "$CORE" ] || CORE="$INSTALL_DIR/cx_core.py"   # install from before the command rename
 [ -f "$CORE" ] || CORE="$LEGACY_DIR/cx_core.py"
 if [ -f "$CORE" ] && command -v python3 >/dev/null 2>&1; then
   if [ "$1" = "--purge" ]; then
