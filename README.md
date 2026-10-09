@@ -293,6 +293,10 @@ writes any environment change it needs (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`, bindi
 prompt marker) to a temporary file that the wrapper then sources. One implementation
 serves every shell.
 
+## Web dashboard (optional)
+
+`web/` holds a small local, read-only dashboard (Next.js + Tailwind CSS) that shows accounts, 5h/7d usage and providers from `zorua usage --json`. It listens on `127.0.0.1:4747` only. See [web/README.md](web/README.md).
+
 ## Files and configuration
 
 ```text

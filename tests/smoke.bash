@@ -115,6 +115,20 @@ if zorua add --claude work 2>/dev/null; then die "name clash across kinds must f
 if zorua add --claude x --device-auth 2>/dev/null; then die "--device-auth is codex-only"; fi
 ok "add --claude + ls (shared namespace)"
 
+# ls --json: machine-readable accounts and providers, never secrets
+out=$(zorua ls --json)
+printf %s "$out" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+names = {a["name"]: a for a in d["accounts"]}
+assert names["alt"]["agent"] == "claude" and names["alt"]["plan"] == "max", names
+assert d["version"] and isinstance(d["providers"], list)
+' || die "ls --json must print valid JSON with the accounts"
+not_contains "$out" "access_token" "ls --json must not print tokens"
+not_contains "$out" "id_token" "ls --json must not print tokens"
+if zorua ls --bogus >/dev/null 2>&1; then die "ls must reject unknown options"; fi
+ok "ls --json"
+
 # claude-settings.json template seeds new Claude accounts and never overwrites
 TPL="$XDG_CONFIG_HOME/zorua/claude-settings.json"
 printf '{"env":{"HTTPS_PROXY":"http://127.0.0.1:1"}}\n' > "$TPL"
