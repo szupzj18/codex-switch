@@ -12,7 +12,8 @@ import { Overview, OverviewSkeleton } from "./overview";
 import { type Command, Palette } from "./palette";
 import { ProviderPage } from "./provider-editor";
 import { Sidebar } from "./sidebar";
-import { setThemeMode } from "./theme";
+import { SHORTCUTS } from "./shortcuts";
+import { cycleTheme, setThemeMode } from "./theme";
 import { alertDanger, ghostBtn, outlineBtn, primaryBtn } from "./ui";
 import { peak } from "./usage";
 import { formatHash, parseHash, type View } from "./view";
@@ -54,6 +55,7 @@ type Dialog =
   | { kind: "account" }
   | { kind: "provider" }
   | { kind: "binding" }
+  | { kind: "help" }
   | { kind: "remove-account"; a: Account }
   | { kind: "remove-provider"; name: string }
   | { kind: "unbind"; dir: string };
@@ -65,14 +67,18 @@ export default function Dashboard() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dialog, setDialog] = useState<Dialog | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ text: string; undo?: () => Promise<void> } | null>(null);
+  const [toastHeld, setToastHeld] = useState(false);
   const [loginFor, setLoginFor] = useState<string | null>(null);
   const [view, setView] = useState<View>({ kind: "overview" });
-  const [palette, setPalette] = useState(false);
+  const [palette, setPalette] = useState<{ initial: string } | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [checks, setChecks] = useState<Record<string, Check>>({});
   const [checking, setChecking] = useState<Set<string>>(new Set());
+  const notice = toast?.text ?? null;
+  const setNotice = useCallback((text: string | null) => setToast(text ? { text } : null), []);
   const dirty = useRef(false);
+  const lastG = useRef(0);
   const applied = useRef(HOME);
 
   const load = useCallback(async (force: boolean) => {
@@ -138,30 +144,43 @@ export default function Dashboard() {
     return () => clearInterval(t);
   }, [load]);
 
-  // ⌘K / Ctrl+K toggles the palette; "/" opens it unless a field has focus or another dialog is open.
+  // ⌘K / Ctrl+K toggles the palette. "/" and the single-key shortcuts (SHORTCUTS) work only when no field
+  // has focus and no dialog is open.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const other = document.querySelector("dialog[open]:not([data-palette])");
+      const anyDialog = document.querySelector("dialog[open]");
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        if (!other) setPalette((p) => !p);
-      } else if (e.key === "/" && !other && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const t = e.target as HTMLElement | null;
-        if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
-        e.preventDefault();
-        setPalette(true);
+        if (!document.querySelector("dialog[open]:not([data-palette])")) setPalette((p) => (p ? null : { initial: "" }));
+        return;
       }
+      if (e.metaKey || e.ctrlKey || e.altKey || anyDialog) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+      const k = e.key;
+      const sequence = k === "o" && Date.now() - lastG.current < 1000;
+      lastG.current = k === "g" ? Date.now() : 0;
+      if (k === "/") setPalette({ initial: "" });
+      else if (k === "r") void load(true);
+      else if (k === "a") setDialog({ kind: "account" });
+      else if (k === "p") setDialog({ kind: "provider" });
+      else if (k === "b") setDialog({ kind: "binding" });
+      else if (k === "t") cycleTheme();
+      else if (k === "?") setDialog({ kind: "help" });
+      else if (sequence) go({ kind: "overview" });
+      else return;
+      e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [load, go]);
 
-  // A notice is a toast: it goes away on its own.
+  // A toast goes away on its own, but not while the pointer or keyboard focus is on it.
   useEffect(() => {
-    if (!notice) return;
-    const t = setTimeout(() => setNotice(null), 7000);
+    if (!toast || toastHeld) return;
+    const t = setTimeout(() => setToast(null), toast.undo ? 10_000 : 7000);
     return () => clearTimeout(t);
-  }, [notice]);
+  }, [toast, toastHeld]);
 
   const data = res?.data;
   const items = useMemo(() => (data ? attention(data, checks) : []), [data, checks]);
@@ -209,7 +228,7 @@ export default function Dashboard() {
 
   /** What ⌘K offers: every account and provider by name, the page-level actions, and the copy-command shortcuts. */
   const commands = (): Command[] => {
-    const out: Command[] = [{ id: "go:overview", group: "Go to", label: "Overview", icon: "grid", run: () => go({ kind: "overview" }) }];
+    const out: Command[] = [{ id: "go:overview", group: "Go to", label: "Overview", icon: "grid", shortcut: "g o", run: () => go({ kind: "overview" }) }];
     const copy = (text: string) =>
       copyText(text).then(
         () => setNotice(`Copied: ${text}`),
@@ -231,16 +250,17 @@ export default function Dashboard() {
       out.push({ id: `go:p:${p.name}`, group: "Go to", label: p.name, icon: "plug", hint: `${p.agent} provider`, keywords: "provider", run: () => go({ kind: "provider", name: p.name }) });
     }
     out.push(
-      { id: "act:refresh", group: "Actions", label: "Refresh now", icon: "refresh", run: () => load(true) },
-      { id: "act:account", group: "Actions", label: "Add account", icon: "plus", run: () => setDialog({ kind: "account" }) },
-      { id: "act:provider", group: "Actions", label: "Add provider", icon: "plus", run: () => setDialog({ kind: "provider" }) },
-      { id: "act:binding", group: "Actions", label: "Bind a directory", icon: "plus", run: () => setDialog({ kind: "binding" }) },
+      { id: "act:refresh", group: "Actions", label: "Refresh now", icon: "refresh", shortcut: "r", run: () => load(true) },
+      { id: "act:account", group: "Actions", label: "Add account", icon: "plus", shortcut: "a", run: () => setDialog({ kind: "account" }) },
+      { id: "act:provider", group: "Actions", label: "Add provider", icon: "plus", shortcut: "p", run: () => setDialog({ kind: "provider" }) },
+      { id: "act:binding", group: "Actions", label: "Bind a directory", icon: "plus", shortcut: "b", run: () => setDialog({ kind: "binding" }) },
     );
     if (data?.providers.length) out.push({ id: "act:check", group: "Actions", label: "Check all providers", icon: "plug", run: () => void checkAll() });
     for (const n of [...(data?.accounts ?? []), ...(data?.providers ?? [])].map((x) => x.name)) {
       out.push({ id: `copy:${n}`, group: "Copy command", label: `zorua use ${n}`, icon: "copy", hint: "copy command", run: () => void copy(`zorua use ${n}`) });
     }
     out.push(
+      { id: "act:help", group: "Actions", label: "Keyboard shortcuts", icon: "search", shortcut: "?", run: () => setDialog({ kind: "help" }) },
       { id: "theme:auto", group: "Theme", label: "Match system", icon: "monitor", keywords: "auto theme", run: () => setThemeMode("auto") },
       { id: "theme:light", group: "Theme", label: "Light", icon: "sun", keywords: "theme", run: () => setThemeMode("light") },
       { id: "theme:dark", group: "Theme", label: "Dark", icon: "moon", keywords: "theme", run: () => setThemeMode("dark") },
@@ -250,7 +270,7 @@ export default function Dashboard() {
 
   return (
     <div className="mx-auto grid max-w-[1800px] gap-6 px-4 pb-16 pt-4 lg:grid-cols-[15.5rem_minmax(0,1fr)] lg:px-6">
-      <Sidebar data={data} view={view} items={items} onGo={go} onSearch={() => setPalette(true)} open={navOpen} onClose={() => setNavOpen(false)} />
+      <Sidebar data={data} view={view} items={items} onGo={go} onSearch={() => setPalette({ initial: "" })} open={navOpen} onClose={() => setNavOpen(false)} />
 
       <main className="min-w-0">
         <header className="sticky top-0 z-20 -mx-4 flex flex-wrap items-center gap-x-3 gap-y-3 border-b border-line bg-bg/80 px-4 py-3 backdrop-blur-md lg:-mx-6 lg:px-6">
@@ -261,19 +281,22 @@ export default function Dashboard() {
             <div className="truncate font-mono text-[11px] text-accent">$ zorua usage{data ? ` · ${data.version}` : ""}</div>
             <h1 className="truncate text-xl font-semibold leading-tight tracking-tight">{title}</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => setPalette(true)} aria-label="Search" className="rounded-lg border border-line-strong p-2 text-dim hover:text-fg lg:hidden">
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setPalette({ initial: "" })} aria-label="Search" className="rounded-lg border border-line-strong p-2 text-dim hover:text-fg lg:hidden">
               <Icon name="search" />
             </button>
+            <button type="button" onClick={() => setPalette({ initial: "add " })} aria-label="Add" className="rounded-lg border border-accent/60 p-2 text-accent hover:bg-accent/10 sm:hidden">
+              <Icon name="plus" />
+            </button>
             {([["account", "account"], ["provider", "provider"], ["binding", "binding"]] as const).map(([k, label]) => (
-              <button key={k} type="button" onClick={() => setDialog({ kind: k })} className={`${outlineBtn} inline-flex items-center gap-1`}>
+              <button key={k} type="button" onClick={() => setDialog({ kind: k })} className={`${outlineBtn} hidden items-center gap-1 sm:inline-flex`}>
                 <Icon name="plus" className="size-3.5" />
                 {label}
               </button>
             ))}
-            <button type="button" onClick={() => load(true)} disabled={loading} className={`${primaryBtn} inline-flex items-center gap-1.5`}>
-              <Icon name="refresh" className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
-              {loading ? "loading…" : "refresh"}
+            <button type="button" onClick={() => load(true)} disabled={loading} aria-label="Refresh" title="Refresh (r)" className={`${primaryBtn} inline-flex items-center gap-1.5 max-sm:p-2`}>
+              <Icon name="refresh" className={`size-3.5 max-sm:size-4 ${loading ? "animate-spin" : ""}`} />
+              <span className="max-sm:hidden">{loading ? "loading…" : "refresh"}</span>
             </button>
           </div>
         </header>
@@ -334,17 +357,36 @@ export default function Dashboard() {
       </main>
 
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
-        {notice && (
-          <div className="pointer-events-auto flex max-w-[34rem] animate-toast items-center gap-3 rounded-xl border border-line-strong bg-panel px-4 py-2.5 text-xs shadow-pop">
+        {toast && (
+          <div
+            className="pointer-events-auto flex max-w-[34rem] animate-toast items-center gap-3 rounded-xl border border-line-strong bg-panel px-4 py-2.5 text-xs shadow-pop"
+            onMouseEnter={() => setToastHeld(true)}
+            onMouseLeave={() => setToastHeld(false)}
+            onFocus={() => setToastHeld(true)}
+            onBlur={() => setToastHeld(false)}
+          >
             <Icon name="check" className="size-4 text-accent" />
-            <span className="min-w-0 break-words">{notice}</span>
-            <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="text-dim hover:text-fg">
+            <span className="min-w-0 break-words">{toast.text}</span>
+            {toast.undo && (
+              <button
+                type="button"
+                className="font-semibold text-accent hover:underline"
+                onClick={() => {
+                  const undo = toast.undo!;
+                  setToast(null);
+                  undo().catch((e) => setNotice(`undo failed: ${e instanceof Error ? e.message : String(e)}`));
+                }}
+              >
+                undo
+              </button>
+            )}
+            <button type="button" onClick={() => setToast(null)} aria-label="Dismiss" className="text-dim hover:text-fg">
               <Icon name="close" className="size-3.5" />
             </button>
           </div>
         )}
       </div>
-      {palette && <Palette commands={commands()} onClose={() => setPalette(false)} />}
+      {palette && <Palette commands={commands()} initial={palette.initial} onClose={() => setPalette(null)} />}
 
       {dialog?.kind === "account" && (
         <Modal title="Add account" onClose={() => setDialog(null)}>
@@ -390,9 +432,42 @@ export default function Dashboard() {
           />
         </Modal>
       )}
+      {dialog?.kind === "help" && (
+        <Modal title="Keyboard shortcuts" onClose={() => setDialog(null)}>
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2.5 text-xs">
+            {SHORTCUTS.map(([keys, what]) => (
+              <div key={keys} className="contents">
+                <dt>
+                  <kbd className="whitespace-nowrap rounded border border-line-strong px-1.5 py-0.5 text-[11px] text-dim">{keys}</kbd>
+                </dt>
+                <dd className="text-fg">{what}</dd>
+              </div>
+            ))}
+          </dl>
+        </Modal>
+      )}
       {dialog?.kind === "unbind" && (
         <Modal title="Unbind directory" onClose={() => setDialog(null)}>
-          <ConfirmForm text={`Stop switching automatically in ${dialog.dir}.`} label="unbind" body={{ action: "binding.remove", dir: dialog.dir }} onDone={finished} onCancel={() => setDialog(null)} />
+          <ConfirmForm
+            text={`Stop switching automatically in ${dialog.dir}.`}
+            label="unbind"
+            body={{ action: "binding.remove", dir: dialog.dir }}
+            onDone={(m) => {
+              const { dir } = dialog;
+              const name = data?.bindings.find((b) => b.dir === dir)?.name;
+              finished(m);
+              if (name)
+                setToast({
+                  text: m,
+                  undo: async () => {
+                    await act({ action: "binding.add", dir, name });
+                    setNotice(`Bound ${dir} to ${name} again`);
+                    void load(true);
+                  },
+                });
+            }}
+            onCancel={() => setDialog(null)}
+          />
         </Modal>
       )}
     </div>

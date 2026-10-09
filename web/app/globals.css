@@ -82,7 +82,7 @@
   --color-danger: #be123c;
   --color-on-accent: #ffffff;
   --color-on-danger: #ffffff;
-  --shadow-card: 0 1px 2px rgb(16 24 20 / 0.04), 0 12px 28px -20px rgb(16 24 20 / 0.25);
+  --shadow-card: 0 1px 2px rgb(16 24 20 / 0.04), 0 8px 20px -18px rgb(16 24 20 / 0.16);
   --shadow-pop: 0 24px 64px -16px rgb(16 24 20 / 0.35);
 }
 
@@ -103,7 +103,7 @@
     --color-danger: #be123c;
     --color-on-accent: #ffffff;
     --color-on-danger: #ffffff;
-    --shadow-card: 0 1px 2px rgb(16 24 20 / 0.04), 0 12px 28px -20px rgb(16 24 20 / 0.25);
+    --shadow-card: 0 1px 2px rgb(16 24 20 / 0.04), 0 8px 20px -18px rgb(16 24 20 / 0.16);
     --shadow-pop: 0 24px 64px -16px rgb(16 24 20 / 0.35);
   }
 }
