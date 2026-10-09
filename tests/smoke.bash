@@ -123,6 +123,7 @@ d = json.load(sys.stdin)
 names = {a["name"]: a for a in d["accounts"]}
 assert names["alt"]["agent"] == "claude" and names["alt"]["plan"] == "max", names
 assert d["version"] and isinstance(d["providers"], list)
+assert isinstance(d["bindings"], list)
 ' || die "ls --json must print valid JSON with the accounts"
 not_contains "$out" "access_token" "ls --json must not print tokens"
 not_contains "$out" "id_token" "ls --json must not print tokens"
