@@ -1,19 +1,11 @@
 import { connection } from "next/server";
+import { guard } from "@/lib/guard";
 import { getState } from "@/lib/zorua";
-
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export async function GET(request: Request) {
   await connection();
-  // Refuse requests whose Host is not loopback (DNS rebinding).
-  const host = request.headers.get("host") ?? "";
-  let hostname = "";
-  try {
-    hostname = new URL(`http://${host}`).hostname;
-  } catch {}
-  if (!LOCAL_HOSTS.has(hostname)) {
-    return Response.json({ error: "forbidden host" }, { status: 403 });
-  }
+  const denied = guard(request, false);
+  if (denied) return denied;
   const force = new URL(request.url).searchParams.has("refresh");
   try {
     const body = await getState(force);

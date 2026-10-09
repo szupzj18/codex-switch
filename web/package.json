@@ -6,7 +6,8 @@
     "dev": "next dev -H 127.0.0.1 -p 4747",
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 4747",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "sh tests/run.sh"
   },
   "dependencies": {
     "next": "16.4.0",
