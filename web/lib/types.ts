@@ -45,3 +45,8 @@ export type StateResponse = {
   stale: boolean;
   error: string | null;
 };
+
+/** What `zorua provider get` prints: the editable view of one provider. */
+export type ProviderDoc =
+  | { agent: "claude"; env: Record<string, string>; models: Record<string, string> }
+  | { agent: "codex"; base_url: string; key: string; model: string; wire_api: string; models: Record<string, string> };

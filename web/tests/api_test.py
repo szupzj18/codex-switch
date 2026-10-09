@@ -10,6 +10,12 @@ def post(body, headers=None, host=None):
     try:
         with urllib.request.urlopen(r, timeout=60) as f: return f.status, json.load(f)
     except urllib.error.HTTPError as e: return e.code, json.load(e)
+def prov(name, reveal=False, headers=None):
+    h = dict(H if headers is None else headers)
+    r = urllib.request.Request(B + "/api/provider", data=json.dumps({"name": name, "reveal": reveal}).encode(), headers=h, method="POST")
+    try:
+        with urllib.request.urlopen(r, timeout=60) as f: return f.status, json.load(f)
+    except urllib.error.HTTPError as e: return e.code, json.load(e)
 def get(path):
     with urllib.request.urlopen(B + path, timeout=60) as f: return json.load(f)
 def check(label, cond, extra=""):
@@ -51,6 +57,31 @@ s, r = post({"action":"provider.add","agent":"claude","name":"kimi2","baseUrl":"
 raw = json.dumps(get("/api/state?refresh=1"))
 check("state lists providers, no key", "kimi2" in raw and "ds2" in raw and KEY not in raw)
 cfg = open(ROOT + "/cfg/providers.json").read(); check("key stored by zorua (0600)", KEY in cfg and oct(os.stat(ROOT + "/cfg/providers.json").st_mode & 0o777) == "0o600")
+# --- provider editor: masked by default, revealed on request, saved through `provider put`
+s, r = prov("kimi2"); doc = r.get("doc", {})
+check("provider doc is masked", s == 200 and KEY not in json.dumps(r) and doc["env"]["ANTHROPIC_AUTH_TOKEN"] != KEY and doc["env"]["ANTHROPIC_BASE_URL"] == "https://api.moonshot.cn/anthropic", r)
+check("provider doc needs Origin", prov("kimi2", headers={"Content-Type": "application/json", "X-Zorua-Web": "1"})[0] == 403)
+check("provider doc needs custom header", prov("kimi2", headers={"Content-Type": "application/json", "Origin": B})[0] == 403)
+check("provider doc unknown 400", prov("zzz")[0] == 400)
+s, full = prov("kimi2", reveal=True); check("reveal returns the key", s == 200 and full["doc"]["env"]["ANTHROPIC_AUTH_TOKEN"] == KEY)
+before = open(ROOT + "/cfg/providers.json").read()
+s, r = post({"action":"provider.save","name":"kimi2","doc":doc}); check("saving the masked doc keeps the key", s == 200 and json.load(open(ROOT + "/cfg/providers.json"))["providers"]["kimi2"]["env"]["ANTHROPIC_AUTH_TOKEN"] == KEY, r)
+edited = json.loads(json.dumps(doc)); edited["env"]["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = "64000"; edited["models"]["big"] = "kimi-k2-big"
+s, r = post({"action":"provider.save","name":"kimi2","doc":edited}); saved = json.load(open(ROOT + "/cfg/providers.json"))["providers"]["kimi2"]
+check("edit saved", s == 200 and saved["env"]["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == "64000" and saved["models"]["big"] == "kimi-k2-big" and saved["env"]["ANTHROPIC_AUTH_TOKEN"] == KEY, r)
+check("previous file kept as .bak", os.path.exists(ROOT + "/cfg/providers.json.bak") and oct(os.stat(ROOT + "/cfg/providers.json.bak").st_mode & 0o777) == "0o600")
+NEWKEY = "sk-test-REPLACED-0987654321"
+rev = json.loads(json.dumps(full["doc"])); rev["env"]["ANTHROPIC_AUTH_TOKEN"] = NEWKEY
+s, r = post({"action":"provider.save","name":"kimi2","doc":rev}); check("new key replaces the old", s == 200 and json.load(open(ROOT + "/cfg/providers.json"))["providers"]["kimi2"]["env"]["ANTHROPIC_AUTH_TOKEN"] == NEWKEY, r)
+bad = json.loads(json.dumps(doc)); bad["env"]["ANTHROPIC_BASE_URL"] = "ftp://x.example"
+s, r = post({"action":"provider.save","name":"kimi2","doc":bad}); check("bad base URL rejected, no secret echoed", s == 422 and NEWKEY not in json.dumps(r) and KEY not in json.dumps(r), r)
+check("lowercase env name rejected", post({"action":"provider.save","name":"kimi2","doc":{**doc,"env":{**doc["env"],"bad name":"x"}}})[0] == 422)
+check("save for another agent rejected", post({"action":"provider.save","name":"kimi2","doc":{"agent":"codex","base_url":"https://x.example","key":"k","model":"m","wire_api":"responses"}})[0] == 422)
+check("save unknown provider 400", post({"action":"provider.save","name":"zzz","doc":doc})[0] == 400)
+check("save non-object doc 400", post({"action":"provider.save","name":"kimi2","doc":"x"})[0] == 400)
+s, r = prov("ds2"); cd = r["doc"]; check("codex doc", s == 200 and cd["agent"] == "codex" and cd["model"] == "gpt-6.1-sol" and KEY not in json.dumps(r), r)
+cd["model"] = "gpt-6.2"; s, r = post({"action":"provider.save","name":"ds2","doc":cd})
+check("codex edit saved, key kept", s == 200 and json.load(open(ROOT + "/cfg/providers.json"))["providers"]["ds2"]["model"] == "gpt-6.2" and json.load(open(ROOT + "/cfg/providers.json"))["providers"]["ds2"]["key"] == KEY, r)
 check("provider.remove unknown 400", post({"action":"provider.remove","name":"w1"})[0] == 400)
 s, r = post({"action":"provider.remove","name":"ds2"}); check("remove provider", s == 200, r)
 
