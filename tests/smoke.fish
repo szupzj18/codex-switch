@@ -38,7 +38,8 @@ source $root/zorua.fish
 
 set -l out (zorua ls | string collect)
 contains_str $out work@example.com "discovers signed-in home"
-contains_str $out 2030-01-02 "expiry column"
+string match -q "*2030-01-02*" -- $out; and die "expiry should be hidden by default"
+contains_str (zorua ls --expiry | string collect) 2030-01-02 "expiry column on request"
 ok "first run + ls"
 
 contains_str (zorua version | string collect) "Zorua" version
@@ -80,7 +81,7 @@ test -d $side; and die "--purge must delete"
 ok "rm / --purge"
 
 mkdir $tmp/bin
-printf '#!/bin/sh\necho "FAKE_HOME=$CODEX_HOME"\necho "ARGS=$*"\n' > $tmp/bin/codex
+printf '#!/bin/sh\necho "FAKE_HOME=$CODEX_HOME"\necho "KEY=${ZORUA_CODEX_KEY:-unset}"\necho "ARGS=$*"\n' > $tmp/bin/codex
 chmod +x $tmp/bin/codex
 set -l one (begin; set -lx PATH $tmp/bin $PATH; fish -c "source $root/zorua.fish; zorua work hello-world"; end | string collect)
 contains_str $one "FAKE_HOME=$HOME/.codex-work" "one-shot home"
@@ -104,7 +105,7 @@ ok "claude accounts"
 
 # ---- providers ----------------------------------------------------------------
 mkdir -p $HOME/.claude
-echo '{"env":{"ANTHROPIC_BASE_URL":"http://127.0.0.1:1","ANTHROPIC_AUTH_TOKEN":"PROXY_MANAGED","ANTHROPIC_DEFAULT_SONNET_MODEL":"internal"}}' > $HOME/.claude/settings.json
+echo '{"env":{"ANTHROPIC_BASE_URL":"http://127.0.0.1:1","ANTHROPIC_AUTH_TOKEN":"PROXY_MANAGED","ANTHROPIC_DEFAULT_SONNET_MODEL":"internal","CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000"},"permissions":{"deny":["Bash(rm:*)"]}}' > $HOME/.claude/settings.json
 set -gx PATH $tmp/cbin $PATH
 zorua provider add glm --base-url https://api.example.com/anthropic/ --key sk-glm-secret-123456 --model sonnet=glm-4.6 >/dev/null; or die "provider add failed"
 echo sk-kimi-secret-123456 | zorua provider add kimi --base-url https://kimi.example.com --api-key --model default=k3 >/dev/null; or die "provider add (stdin key) failed"
@@ -114,8 +115,8 @@ set -l listing (begin; zorua provider ls; zorua provider show glm; zorua; end | 
 contains_str $listing api.example.com "provider endpoint shown"
 string match -q "*sk-glm-secret-123456*" -- $listing; and die "key leaked in listing"
 zorua use glm >/dev/null
-test "$ZORUA_PROVIDER" = glm; or die "use glm did not set ZORUA_PROVIDER"
-test "$ZORUA_PROMPT_TEXT" = "[provider:glm]"; or die "prompt text: $ZORUA_PROMPT_TEXT"
+test "$ZORUA_CLAUDE_PROVIDER" = glm; or die "use glm did not set ZORUA_CLAUDE_PROVIDER"
+test "$ZORUA_PROMPT_TEXT" = "[claude-provider:glm]"; or die "prompt text: $ZORUA_PROMPT_TEXT"
 set -l pout (claude hi | string collect)
 contains_str $pout "TOKEN=sk-glm-secret-123456" "provider key reaches claude"
 contains_str $pout "BASE=https://api.example.com/anthropic" "provider base url reaches claude"
@@ -125,17 +126,19 @@ zorua use kimi >/dev/null
 set pout (claude hi | string collect)
 contains_str $pout '"ANTHROPIC_API_KEY": "sk-kimi-secret-123456"' "api-key style provider"
 contains_str $pout '"ANTHROPIC_AUTH_TOKEN": ""' "conflicting token is blanked"
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert list(d)==["env"], list(d)' $XDG_CONFIG_HOME/zorua/run/kimi.settings.json; or die "generated settings must only contain env"
+string match -q "*MAX_OUTPUT_TOKENS*" -- (cat $XDG_CONFIG_HOME/zorua/run/kimi.settings.json | string collect); and die "unrelated user env must be left alone"
 zorua use - >/dev/null
-test -z "$ZORUA_PROVIDER"; or die "use - did not clear ZORUA_PROVIDER"
+test -z "$ZORUA_CLAUDE_PROVIDER"; or die "use - did not clear ZORUA_CLAUDE_PROVIDER"
 string match -q "*--settings*" -- (claude plain | string collect); and die "claude must be untouched without a provider"
 mkdir -p $tmp/pproj
 cd $tmp/pproj
 zorua bind glm >/dev/null
-test "$ZORUA_PROVIDER" = glm -a "$ZORUA_AUTO_PROVIDER" = glm; or die "provider bind did not apply"
+test "$ZORUA_CLAUDE_PROVIDER" = glm -a "$ZORUA_AUTO_CLAUDE_PROVIDER" = glm; or die "provider bind did not apply"
 cd $tmp
-test -z "$ZORUA_PROVIDER"; or die "leaving the bound directory did not restore"
+test -z "$ZORUA_CLAUDE_PROVIDER"; or die "leaving the bound directory did not restore"
 cd $tmp/pproj
-test "$ZORUA_PROVIDER" = glm; or die "re-entering the bound directory did not switch"
+test "$ZORUA_CLAUDE_PROVIDER" = glm; or die "re-entering the bound directory did not switch"
 zorua unbind $tmp/pproj >/dev/null
 cd $tmp
 zorua use glm >/dev/null
@@ -145,6 +148,29 @@ zorua provider rm glm >/dev/null; or die "provider rm failed"
 string match -q "*glm *" -- (zorua provider ls | string collect); and die "provider rm left the entry"
 set -gx PATH $oldpath
 ok "providers: add, use, claude launch, bind, rm"
+
+# ---- codex providers: one slot per agent ----------------------------------------
+set -gx PATH $tmp/bin $PATH
+echo sk-ds-secret-123456 | zorua provider add ds --codex --base-url https://api.deepseek.com --model deepseek-v4-flash >/dev/null; or die "codex provider add failed"
+zorua provider add ds2 --codex --base-url https://x.example.com --key k 2>/dev/null; and die "codex provider without --model should fail"
+zorua provider add ds2 --codex --api-key --base-url https://x.example.com --model m --key k 2>/dev/null; and die "--api-key is Claude-only"
+set -l plist (begin; zorua provider ls; zorua provider show ds; end | string collect)
+string match -q "*sk-ds-secret-123456*" -- $plist; and die "codex key leaked in listing"
+zorua use kimi >/dev/null; zorua use ds >/dev/null
+test "$ZORUA_CODEX_PROVIDER" = ds -a "$ZORUA_CLAUDE_PROVIDER" = kimi; or die "claude and codex providers must be independent"
+contains_str $ZORUA_PROMPT_TEXT "codex-provider:ds" "codex provider marker"
+contains_str $ZORUA_PROMPT_TEXT "claude-provider:kimi" "claude provider marker"
+set -l cout (codex exec hi | string collect)
+contains_str $cout "KEY=sk-ds-secret-123456" "codex key travels in the environment"
+contains_str $cout 'model_provider="zorua_ds"' "codex provider selected via -c"
+contains_str $cout 'model="deepseek-v4-flash"' "codex model via -c"
+string match -q "*ARGS=*sk-ds-secret*" -- $cout; and die "key must not appear in argv"
+zorua use - >/dev/null
+test -z "$ZORUA_CODEX_PROVIDER" -a -z "$ZORUA_CLAUDE_PROVIDER"; or die "use - must clear both provider slots"
+string match -q "*model_provider*" -- (codex exec hi | string collect); and die "codex must be untouched without a provider"
+zorua provider rm ds >/dev/null; or die "codex provider rm failed"
+ok "codex providers: independent slot, env key, -c overrides"
+set -gx PATH $oldpath
 
 rm -rf $tmp
 echo "All $n fish smoke checks passed."

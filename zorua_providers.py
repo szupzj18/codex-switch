@@ -1,9 +1,15 @@
-"""Zorua providers: third-party Claude Code endpoints (base URL + key + model mapping).
+"""Zorua providers: third-party endpoints for Claude Code and Codex (base URL + key + model).
 
-A provider is just the `env` block Claude Code should run with. Launching goes
-through `claude --settings <file>`: a plain ANTHROPIC_BASE_URL in the shell loses
-to the `env` block in ~/.claude/settings.json, while --settings outranks it.
-The settings file is written 0600 so the key never shows up in `ps`.
+Every provider belongs to one agent ("kind"), so a shell can have one Claude provider and
+one Codex provider active at the same time.
+
+Claude: a provider is the `env` block Claude Code should run with. Launching goes through
+`claude --settings <file>`: a plain ANTHROPIC_BASE_URL in the shell loses to the `env` block
+in ~/.claude/settings.json, while --settings outranks it. The file is written 0600 so the key
+never shows up in `ps`.
+
+Codex: a provider is a [model_providers.*] table plus a model, handed to `codex -c ...`
+overrides; the key travels in the ZORUA_CODEX_KEY environment variable (env_key), never argv.
 
 Stdlib only; no knowledge of the shell wrappers. Functions take the config
 directory explicitly so zorua_core.py stays the only owner of its location.
@@ -51,6 +57,31 @@ def _write_private(path, text):
 
 def save(cfg, providers):
     _write_private(_file(cfg), json.dumps({"providers": providers}, indent=2, sort_keys=True) + "\n")
+
+
+AGENTS = ("claude", "codex")
+CODEX_KEY_VAR = "ZORUA_CODEX_KEY"
+
+
+def agent(p):
+    return p.get("kind", "claude")
+
+
+def endpoint(p):
+    return host(p["env"]) if agent(p) == "claude" else host({"ANTHROPIC_BASE_URL": p.get("base_url", "")})
+
+
+def secret(p):
+    """-> the provider's key (empty when it has none)"""
+    if agent(p) == "claude":
+        return p["env"].get(key_var(p["env"]), "")
+    return p.get("key", "")
+
+
+def model_summary(p):
+    if agent(p) == "claude":
+        return ",".join(r for r, v in MODEL_VARS.items() if v in p["env"]) or "-"
+    return p.get("model") or "-"
 
 
 def is_secret(var):
@@ -128,12 +159,85 @@ def write_settings(cfg, name, doc):
 
 
 # --------------------------------------------------------------------------
+# Codex
+# --------------------------------------------------------------------------
+
+def _toml_str(v):
+    return json.dumps(v)          # JSON string escapes are valid TOML basic-string escapes
+
+
+def build_codex(base_url, key, model, wire_api="responses"):
+    if not model:
+        raise ValueError("a Codex provider needs --model ID (Codex would otherwise send its own default model)")
+    return {"kind": "codex", "base_url": base_url.rstrip("/"), "key": key, "model": model, "wire_api": wire_api}
+
+
+def codex_args(name, p):
+    """-c overrides that make codex use provider `p` (the table key is the provider name)."""
+    table = "zorua_%s" % name.replace("-", "_")
+    inline = "{name=%s, base_url=%s, wire_api=%s, env_key=%s}" % (
+        _toml_str(name), _toml_str(p["base_url"]), _toml_str(p.get("wire_api", "responses")), _toml_str(CODEX_KEY_VAR))
+    return ["-c", "model_provider=%s" % _toml_str(table),
+            "-c", "model_providers.%s=%s" % (table, inline),
+            "-c", "model=%s" % _toml_str(p["model"])]
+
+
+def codex_env(base, p):
+    env = dict(base)
+    env[CODEX_KEY_VAR] = p.get("key", "")
+    return env
+
+
+# --------------------------------------------------------------------------
 # Import from cc-switch (read-only)
 # --------------------------------------------------------------------------
 
 def sanitize_name(raw):
     n = re.sub(r"[^A-Za-z0-9_-]+", "-", raw.strip()).strip("-").lower()
     return n or "provider"
+
+
+def parse_codex_config(text):
+    """-> (model, base_url, wire_api) from a cc-switch Codex config.toml string, or None.
+
+    Reads the one [model_providers.<id>] table that `model_provider` selects; this is a small
+    purpose-built reader (no tomllib before Python 3.11), not a TOML parser."""
+    head = text.split("\n[", 1)[0]
+    m = re.search(r'^\s*model_provider\s*=\s*"([^"]+)"', head, re.M)
+    if not m:
+        return None
+    model = re.search(r'^\s*model\s*=\s*"([^"]+)"', head, re.M)
+    sec = re.search(r"^\[model_providers\.%s\]\s*\n(.*?)(?=^\[|\Z)" % re.escape(m.group(1)), text, re.M | re.S)
+    if not sec or not model:
+        return None
+    url = re.search(r'^\s*base_url\s*=\s*"([^"]+)"', sec.group(1), re.M)
+    wire = re.search(r'^\s*wire_api\s*=\s*"([^"]+)"', sec.group(1), re.M)
+    if not url:
+        return None
+    return model.group(1), url.group(1), (wire.group(1) if wire else "responses")
+
+
+def cc_switch_codex_providers(db):
+    """-> [(display name, provider)] for cc-switch's custom Codex providers that carry their own
+    base URL, model and API key (official logins are skipped)."""
+    con = sqlite3.connect("file:%s?mode=ro" % db, uri=True)
+    try:
+        rows = con.execute("SELECT name, settings_config FROM providers WHERE app_type='codex' "
+                           "ORDER BY sort_index, name").fetchall()
+    finally:
+        con.close()
+    out = []
+    for name, cfg in rows:
+        try:
+            c = json.loads(cfg)
+            key = (c.get("auth") or {}).get("OPENAI_API_KEY") or ""
+            parsed = parse_codex_config(c.get("config") or "")
+        except (ValueError, AttributeError):
+            continue
+        if not key or not parsed:
+            continue
+        out.append((name, build_codex(parsed[1], key, parsed[0], parsed[2])))
+    return out
 
 
 def cc_switch_providers(db):

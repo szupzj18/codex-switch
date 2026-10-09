@@ -6,7 +6,7 @@
 #   PS1='$ZORUA_PROMPT_TEXT \u@\h:\w\$ '
 
 ZORUA_CORE="${ZORUA_CORE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/zorua_core.py}"
-ZORUA_AUTO_ACTIVE="" _ZORUA_PRE_AUTO_HOME="" ZORUA_AUTO_CLAUDE="" _ZORUA_PRE_AUTO_CLAUDE="" ZORUA_AUTO_PROVIDER="" _ZORUA_PRE_AUTO_PROVIDER="" ZORUA_PROMPT_KIND="" ZORUA_PROMPT_NAME="" ZORUA_PROMPT_TEXT=""
+ZORUA_AUTO_ACTIVE="" _ZORUA_PRE_AUTO_HOME="" ZORUA_AUTO_CLAUDE="" _ZORUA_PRE_AUTO_CLAUDE="" ZORUA_AUTO_CLAUDE_PROVIDER="" _ZORUA_PRE_AUTO_CLAUDE_PROVIDER="" ZORUA_AUTO_CODEX_PROVIDER="" _ZORUA_PRE_AUTO_CODEX_PROVIDER="" ZORUA_PROMPT_KIND="" ZORUA_PROMPT_NAME="" ZORUA_PROMPT_TEXT=""
 _ZORUA_BINDINGS="${ZORUA_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zorua}/bindings.tsv"
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -19,7 +19,8 @@ _zorua_run() {
   f=$(mktemp "${TMPDIR:-/tmp}/zorua.XXXXXX") || return 1
   ZORUA_SHELL=bash ZORUA_EVAL_FILE=$f ZORUA_AUTO_ACTIVE=$ZORUA_AUTO_ACTIVE ZORUA_PRE_AUTO_HOME=$_ZORUA_PRE_AUTO_HOME \
     ZORUA_AUTO_CLAUDE=$ZORUA_AUTO_CLAUDE ZORUA_PRE_AUTO_CLAUDE=$_ZORUA_PRE_AUTO_CLAUDE \
-    ZORUA_AUTO_PROVIDER=$ZORUA_AUTO_PROVIDER ZORUA_PRE_AUTO_PROVIDER=$_ZORUA_PRE_AUTO_PROVIDER \
+    ZORUA_AUTO_CLAUDE_PROVIDER=$ZORUA_AUTO_CLAUDE_PROVIDER ZORUA_PRE_AUTO_CLAUDE_PROVIDER=$_ZORUA_PRE_AUTO_CLAUDE_PROVIDER \
+    ZORUA_AUTO_CODEX_PROVIDER=$ZORUA_AUTO_CODEX_PROVIDER ZORUA_PRE_AUTO_CODEX_PROVIDER=$_ZORUA_PRE_AUTO_CODEX_PROVIDER \
     python3 "$ZORUA_CORE" "$@"
   rc=$?
   if [ -s "$f" ]; then . "$f"; fi
@@ -29,12 +30,19 @@ _zorua_run() {
 
 zorua() { _zorua_run "$@"; }
 
-# While a provider is active (zorua use <provider>), plain `claude` runs on it.
+# While a provider is active (zorua use <provider>), plain `claude` / `codex` runs on it.
 claude() {
-  if [ -n "${ZORUA_PROVIDER:-}" ]; then
+  if [ -n "${ZORUA_CLAUDE_PROVIDER:-}" ]; then
     ZORUA_SHELL=bash python3 "$ZORUA_CORE" launch claude "$@"
   else
     command claude "$@"
+  fi
+}
+codex() {
+  if [ -n "${ZORUA_CODEX_PROVIDER:-}" ]; then
+    ZORUA_SHELL=bash python3 "$ZORUA_CORE" launch codex "$@"
+  else
+    command codex "$@"
   fi
 }
 
@@ -42,7 +50,7 @@ claude() {
 _zorua_prompt_hook() {
   if [ "$PWD" != "${_ZORUA_LAST_PWD:-}" ]; then
     _ZORUA_LAST_PWD=$PWD
-    if [ -s "$_ZORUA_BINDINGS" ] || [ -n "$ZORUA_AUTO_ACTIVE" ] || [ -n "$ZORUA_AUTO_CLAUDE" ] || [ -n "$ZORUA_AUTO_PROVIDER" ]; then
+    if [ -s "$_ZORUA_BINDINGS" ] || [ -n "$ZORUA_AUTO_ACTIVE" ] || [ -n "$ZORUA_AUTO_CLAUDE" ] || [ -n "$ZORUA_AUTO_CLAUDE_PROVIDER" ] || [ -n "$ZORUA_AUTO_CODEX_PROVIDER" ]; then
       _zorua_run apply "$PWD"
     fi
   fi
