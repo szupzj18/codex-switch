@@ -22,11 +22,22 @@ export type Provider = {
   models: Record<string, string>;
 };
 
+export type Binding = { name: string; dir: string; kind: string | null };
+
 export type ZoruaState = {
   version: string;
   generated_at: number;
   accounts: Account[];
   providers: Provider[];
+  bindings: Binding[];
+};
+
+export type LoginJob = {
+  name: string;
+  status: "running" | "done" | "failed";
+  output: string;
+  urls: string[];
+  startedAt: number;
 };
 
 export type StateResponse = {

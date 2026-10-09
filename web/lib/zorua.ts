@@ -3,59 +3,91 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { ZoruaState } from "./types";
 
-const CORE = process.env.ZORUA_CORE ?? path.join(homedir(), ".zorua", "zorua_core.py");
+export const CORE = process.env.ZORUA_CORE ?? path.join(homedir(), ".zorua", "zorua_core.py");
 const TTL_MS = 30_000;
 const MIN_FORCE_GAP_MS = 5_000;
 
-let cache: { at: number; data: ZoruaState } | null = null;
-let inflight: Promise<ZoruaState> | null = null;
-let lastError: string | null = null;
+type Cache = { at: number; data: ZoruaState };
+// Kept on globalThis so route modules share one cache.
+const g = globalThis as unknown as {
+  __zoruaCache?: { cache: Cache | null; inflight: Promise<ZoruaState> | null; lastError: string | null };
+};
+const store = (g.__zoruaCache ??= { cache: null, inflight: null, lastError: null });
 
-function run(): Promise<ZoruaState> {
+export class ZoruaError extends Error {}
+
+/** Run `zorua_core.py <args>`; never through a shell. Secrets go in `env`, not in args. */
+export function runCore(
+  args: string[],
+  opts: { env?: Record<string, string>; cwd?: string; timeout?: number } = {},
+): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       "python3",
-      [CORE, "usage", "--json"],
-      { timeout: 60_000, maxBuffer: 5 * 1024 * 1024, env: process.env },
+      [CORE, ...args],
+      {
+        timeout: opts.timeout ?? 60_000,
+        maxBuffer: 5 * 1024 * 1024,
+        cwd: opts.cwd,
+        env: { ...process.env, ...opts.env, ...(opts.cwd ? { PWD: opts.cwd } : {}) },
+      },
       (err, stdout, stderr) => {
-        if (err) return reject(new Error((stderr || err.message).trim().slice(0, 400)));
-        try {
-          resolve(JSON.parse(stdout) as ZoruaState);
-        } catch {
-          reject(new Error("zorua returned invalid JSON"));
+        if (err) {
+          const msg = (stderr || stdout || err.message).trim().replace(/\s+/g, " ").slice(0, 400);
+          return reject(new ZoruaError(msg));
         }
+        resolve(stdout);
       },
     );
   });
 }
 
+async function readState(): Promise<ZoruaState> {
+  const out = await runCore(["usage", "--json"]);
+  try {
+    return JSON.parse(out) as ZoruaState;
+  } catch {
+    throw new ZoruaError("zorua returned invalid JSON");
+  }
+}
+
 function refresh(): Promise<ZoruaState> {
-  if (!inflight) {
-    inflight = run()
+  if (!store.inflight) {
+    store.inflight = readState()
       .then((data) => {
-        cache = { at: Date.now(), data };
-        lastError = null;
+        store.cache = { at: Date.now(), data };
+        store.lastError = null;
         return data;
       })
       .catch((e: Error) => {
-        lastError = e.message;
+        store.lastError = e.message;
         throw e;
       })
       .finally(() => {
-        inflight = null;
+        store.inflight = null;
       });
   }
-  return inflight;
+  return store.inflight;
+}
+
+/** Drop the snapshot after a change so the next read is fresh. */
+export function invalidate() {
+  store.cache = null;
 }
 
 /** Stale-while-revalidate: an old snapshot is served at once and refreshed in the background. */
 export async function getState(force: boolean) {
-  const age = cache ? Date.now() - cache.at : Infinity;
-  if (!cache || (force && age > MIN_FORCE_GAP_MS)) {
+  const age = store.cache ? Date.now() - store.cache.at : Infinity;
+  if (!store.cache || (force && age > MIN_FORCE_GAP_MS)) {
     const data = await refresh();
     return { data, stale: false, error: null as string | null };
   }
   const stale = age > TTL_MS;
   if (stale) refresh().catch(() => {});
-  return { data: cache.data, stale, error: lastError };
+  return { data: store.cache.data, stale, error: store.lastError };
+}
+
+/** A cheap, uncached read of the registry (no network): used to validate actions. */
+export async function readRegistry(): Promise<ZoruaState> {
+  return JSON.parse(await runCore(["ls", "--json"])) as ZoruaState;
 }

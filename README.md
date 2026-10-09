@@ -295,7 +295,7 @@ serves every shell.
 
 ## Web dashboard (optional)
 
-`web/` holds a small local, read-only dashboard (Next.js + Tailwind CSS) that shows accounts, 5h/7d usage and providers from `zorua usage --json`. It listens on `127.0.0.1:4747` only. See [web/README.md](web/README.md).
+`web/` holds a small local dashboard (Next.js + Tailwind CSS) for accounts, 5h/7d usage, providers and directory bindings, with add/remove/sign-in. It reads `zorua usage --json`, listens on `127.0.0.1:4747` only and runs the matching `zorua` commands for changes. See [web/README.md](web/README.md).
 
 ## Files and configuration
 
