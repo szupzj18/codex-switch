@@ -53,6 +53,43 @@ function Value({ label, value, onChange, className = "" }: { label: string; valu
   );
 }
 
+/** Copies a value that is fetched on click, so a masked key can be copied without being shown. */
+function CopyButton({ get, label }: { get: () => Promise<string>; label: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const click = async () => {
+    try {
+      const text = await get();
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const t = document.createElement("textarea"); // clipboard API unavailable: fall back
+        t.value = text;
+        t.style.position = "fixed";
+        t.style.opacity = "0";
+        document.body.appendChild(t);
+        t.select();
+        const ok = document.execCommand("copy");
+        t.remove();
+        if (!ok) throw new Error("copy failed");
+      }
+      setState("copied");
+    } catch {
+      setState("failed");
+    }
+    setTimeout(() => setState("idle"), 1500);
+  };
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={click}
+      className={`w-14 rounded-md border border-line px-2 py-1 text-[11px] ${state === "copied" ? "text-accent" : state === "failed" ? "text-danger" : "text-dim hover:text-fg"}`}
+    >
+      {state === "copied" ? "copied" : state === "failed" ? "failed" : "copy"}
+    </button>
+  );
+}
+
 function Table({
   items,
   onChange,
@@ -60,6 +97,7 @@ function Table({
   keyLabel,
   valueLabel,
   addLabel,
+  copy,
 }: {
   items: Row[];
   onChange: (r: Row[]) => void;
@@ -67,15 +105,17 @@ function Table({
   keyLabel: string;
   valueLabel: string;
   addLabel: string;
+  copy?: (r: Row) => Promise<string>;
 }) {
   const set = (id: number, patch: Partial<Row>) => onChange(items.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   return (
     <div>
-      <div className="grid grid-cols-[minmax(9rem,20rem)_minmax(0,1fr)_1.5rem] items-start gap-x-2 gap-y-1.5">
+      <div className={`grid ${copy ? "grid-cols-[minmax(9rem,20rem)_minmax(0,1fr)_auto_1.5rem]" : "grid-cols-[minmax(9rem,20rem)_minmax(0,1fr)_1.5rem]"} items-start gap-x-2 gap-y-1.5`}>
         {items.map((r) => (
           <div key={r.id} className="contents">
             <input aria-label={keyLabel} className={field} value={r.k} onChange={(e) => set(r.id, { k: e.target.value })} spellCheck={false} />
             <Value label={valueLabel} className={secret?.(r.k) ? "text-warn" : ""} value={r.v} onChange={(v) => set(r.id, { v })} />
+            {copy && (secret?.(r.k) ? <CopyButton label={`copy ${r.k}`} get={() => copy(r)} /> : <span />)}
             <button type="button" aria-label={`delete ${r.k || "row"}`} className="py-1 text-dim hover:text-danger" onClick={() => onChange(items.filter((x) => x.id !== r.id))}>
               ×
             </button>
@@ -163,6 +203,16 @@ export function ProviderPage({
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  /** What to copy for a secret: the stored value when the field still shows its masked form, else what was typed. */
+  const copyValue = async (shown: string, masked: string | undefined, real: (d: ProviderDoc) => string | undefined) => {
+    if (masked === undefined || shown !== masked) return shown;
+    const full = open ?? (await fetchDoc(name, true));
+    setOpen(full);
+    const v = real(full);
+    if (v === undefined) throw new Error("no such value");
+    return v;
   };
 
   const toMap = (items: Row[], what: string): Record<string, string> => {
@@ -263,7 +313,15 @@ export function ProviderPage({
           (claude ? (
             <>
               <p className="mb-3 text-[11px] text-dim/70">ANTHROPIC_BASE_URL and a key (ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY) are required. Highlighted values are secrets.</p>
-              <Table items={env} onChange={setEnv} secret={isSecret} keyLabel="variable" valueLabel="value" addLabel="add variable" />
+              <Table
+                items={env}
+                onChange={setEnv}
+                secret={isSecret}
+                keyLabel="variable"
+                valueLabel="value"
+                addLabel="add variable"
+                copy={(r) => copyValue(r.v, base.agent === "claude" ? base.env[r.k] : undefined, (d) => (d.agent === "claude" ? d.env[r.k] : undefined))}
+              />
             </>
           ) : (
             <div className="grid gap-3">
@@ -271,7 +329,12 @@ export function ProviderPage({
                 <Value label="base URL" value={codex.base_url} onChange={(v) => setCodex({ ...codex, base_url: v })} />
               </Labeled>
               <Labeled label="key">
-                <Value label="key" className="text-warn" value={codex.key} onChange={(v) => setCodex({ ...codex, key: v })} />
+                <span className="flex items-start gap-2">
+                  <span className="min-w-0 flex-1">
+                    <Value label="key" className="text-warn" value={codex.key} onChange={(v) => setCodex({ ...codex, key: v })} />
+                  </span>
+                  <CopyButton label="copy key" get={() => copyValue(codex.key, base.agent === "codex" ? base.key : undefined, (d) => (d.agent === "codex" ? d.key : undefined))} />
+                </span>
               </Labeled>
               <Labeled label="model" hint="what Codex sends when no model is picked">
                 <Value label="model" value={codex.model} onChange={(v) => setCodex({ ...codex, model: v })} />
