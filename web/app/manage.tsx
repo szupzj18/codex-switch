@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { LoginJob, ZoruaState } from "@/lib/types";
+import { Icon } from "./icons";
+import { alertDanger, fieldCls as field, ghostBtn as ghost, primaryBtn as primary } from "./ui";
 
 export async function act(body: Record<string, unknown>): Promise<{ message: string; job?: LoginJob }> {
   const r = await fetch("/api/action", {
@@ -14,11 +16,6 @@ export async function act(body: Record<string, unknown>): Promise<{ message: str
   return data;
 }
 
-const field =
-  "w-full rounded-md border border-line bg-bg px-2.5 py-1.5 text-sm text-fg outline-none placeholder:text-dim/60 focus:border-accent";
-const primary = "rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-on-accent disabled:opacity-50";
-const ghost = "rounded-md border border-line px-3 py-1.5 text-xs text-dim hover:text-fg";
-
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -30,10 +27,15 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
       ref={ref}
       onClose={onClose}
       onClick={(e) => e.target === ref.current && ref.current?.close()}
-      className="m-auto max-h-[90vh] w-[min(92vw,30rem)] rounded-xl border border-line bg-panel p-0 text-fg backdrop:bg-black/70"
+      className="m-auto max-h-[90vh] w-[min(92vw,30rem)] rounded-2xl border border-line-strong bg-panel p-0 text-fg shadow-pop backdrop:bg-black/60 backdrop:backdrop-blur-sm open:animate-pop"
     >
       <div className="p-5">
-        <h2 className="mb-4 text-sm before:mr-2 before:text-accent before:content-['#']">{title}</h2>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+          <button type="button" onClick={() => ref.current?.close()} aria-label="Close" className="-mr-1 rounded-lg p-1 text-dim hover:text-fg">
+            <Icon name="close" />
+          </button>
+        </div>
         {children}
       </div>
     </dialog>
@@ -72,7 +74,7 @@ type Done = (r: { message: string; job?: LoginJob }) => void;
 function Actions({ busy, error, label, onCancel, disabled }: { busy: boolean; error: string | null; label: string; onCancel: () => void; disabled?: boolean }) {
   return (
     <>
-      {error && <p className="mb-3 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
+      {error && <p className={`mb-3 ${alertDanger}`}>{error}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" className={ghost} onClick={onCancel}>
           cancel
@@ -236,7 +238,7 @@ export function LoginBanner({ name, onFinished }: { name: string; onFinished: ()
   if (!job) return null;
   const tone = job.status === "failed" ? "border-danger/40 bg-danger/10" : job.status === "done" ? "border-accent/40 bg-accent/10" : "border-warn/40 bg-warn/10";
   return (
-    <div className={`mt-3 rounded-md border px-3 py-2 text-xs ${tone}`} aria-live="polite">
+    <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${tone}`} aria-live="polite">
       <div className="flex items-center gap-2">
         <b>
           sign-in {job.name}: {job.status === "running" ? "waiting for the browser…" : job.status === "done" ? "done" : "failed"}

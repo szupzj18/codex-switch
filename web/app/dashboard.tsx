@@ -5,10 +5,16 @@ import type { Account, Check, StateResponse } from "@/lib/types";
 import { AccountView } from "./account-view";
 import { attention } from "./attention";
 import { checkProvider, newest } from "./check";
+import { copyText } from "./copy";
+import { Icon } from "./icons";
 import { act, AddAccountForm, AddBindingForm, AddProviderForm, LoginBanner, Modal, RemoveAccountForm } from "./manage";
-import { Overview } from "./overview";
+import { Overview, OverviewSkeleton } from "./overview";
+import { type Command, Palette } from "./palette";
 import { ProviderPage } from "./provider-editor";
 import { Sidebar } from "./sidebar";
+import { setThemeMode } from "./theme";
+import { alertDanger, ghostBtn, outlineBtn, primaryBtn } from "./ui";
+import { peak } from "./usage";
 import { formatHash, parseHash, type View } from "./view";
 
 const POLL_MS = 30_000;
@@ -31,12 +37,12 @@ function ConfirmForm({ text, label, body, onDone, onCancel }: { text: string; la
       }}
     >
       <p className="mb-3 text-xs text-dim">{text}</p>
-      {error && <p className="mb-3 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
+      {error && <p className={`mb-3 ${alertDanger}`}>{error}</p>}
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="rounded-md border border-line px-3 py-1.5 text-xs text-dim hover:text-fg">
+        <button type="button" onClick={onCancel} className={ghostBtn}>
           cancel
         </button>
-        <button type="submit" disabled={busy} className="rounded-md bg-danger px-3 py-1.5 text-xs font-bold text-on-danger disabled:opacity-50">
+        <button type="submit" disabled={busy} className="rounded-lg bg-danger px-3 py-1.5 text-xs font-semibold text-on-danger transition hover:brightness-110 disabled:opacity-50">
           {busy ? "working…" : label}
         </button>
       </div>
@@ -62,6 +68,8 @@ export default function Dashboard() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loginFor, setLoginFor] = useState<string | null>(null);
   const [view, setView] = useState<View>({ kind: "overview" });
+  const [palette, setPalette] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [checks, setChecks] = useState<Record<string, Check>>({});
   const [checking, setChecking] = useState<Set<string>>(new Set());
   const dirty = useRef(false);
@@ -109,6 +117,7 @@ export default function Dashboard() {
     };
   }, []);
   const go = useCallback((v: View) => {
+    setNavOpen(false);
     location.hash = formatHash(v);
   }, []);
   const setDirty = useCallback((d: boolean) => {
@@ -128,6 +137,31 @@ export default function Dashboard() {
     const t = setInterval(() => load(false), POLL_MS);
     return () => clearInterval(t);
   }, [load]);
+
+  // ⌘K / Ctrl+K toggles the palette; "/" opens it unless a field has focus or another dialog is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const other = document.querySelector("dialog[open]:not([data-palette])");
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        if (!other) setPalette((p) => !p);
+      } else if (e.key === "/" && !other && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target as HTMLElement | null;
+        if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+        e.preventDefault();
+        setPalette(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // A notice is a toast: it goes away on its own.
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 7000);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   const data = res?.data;
   const items = useMemo(() => (data ? attention(data, checks) : []), [data, checks]);
@@ -173,43 +207,86 @@ export default function Dashboard() {
   const provider = view.kind === "provider" ? data?.providers.find((p) => p.name === view.name) : undefined;
   const title = view.kind === "overview" ? "Overview" : view.kind === "account" ? `Account · ${view.name}` : `Provider · ${view.name}`;
 
+  /** What ⌘K offers: every account and provider by name, the page-level actions, and the copy-command shortcuts. */
+  const commands = (): Command[] => {
+    const out: Command[] = [{ id: "go:overview", group: "Go to", label: "Overview", icon: "grid", run: () => go({ kind: "overview" }) }];
+    const copy = (text: string) =>
+      copyText(text).then(
+        () => setNotice(`Copied: ${text}`),
+        () => setNotice("Copy failed"),
+      );
+    for (const a of data?.accounts ?? []) {
+      const p = peak(a);
+      out.push({
+        id: `go:a:${a.name}`,
+        group: "Go to",
+        label: a.name,
+        icon: "user",
+        hint: `${a.agent === "codex" ? "Codex" : "Claude Code"}${a.plan ? ` · ${a.plan}` : ""}${p != null ? ` · ${p}%` : ""}`,
+        keywords: `account ${a.email ?? ""}`,
+        run: () => go({ kind: "account", name: a.name }),
+      });
+    }
+    for (const p of data?.providers ?? []) {
+      out.push({ id: `go:p:${p.name}`, group: "Go to", label: p.name, icon: "plug", hint: `${p.agent} provider`, keywords: "provider", run: () => go({ kind: "provider", name: p.name }) });
+    }
+    out.push(
+      { id: "act:refresh", group: "Actions", label: "Refresh now", icon: "refresh", run: () => load(true) },
+      { id: "act:account", group: "Actions", label: "Add account", icon: "plus", run: () => setDialog({ kind: "account" }) },
+      { id: "act:provider", group: "Actions", label: "Add provider", icon: "plus", run: () => setDialog({ kind: "provider" }) },
+      { id: "act:binding", group: "Actions", label: "Bind a directory", icon: "plus", run: () => setDialog({ kind: "binding" }) },
+    );
+    if (data?.providers.length) out.push({ id: "act:check", group: "Actions", label: "Check all providers", icon: "plug", run: () => void checkAll() });
+    for (const n of [...(data?.accounts ?? []), ...(data?.providers ?? [])].map((x) => x.name)) {
+      out.push({ id: `copy:${n}`, group: "Copy command", label: `zorua use ${n}`, icon: "copy", hint: "copy command", run: () => void copy(`zorua use ${n}`) });
+    }
+    out.push(
+      { id: "theme:auto", group: "Theme", label: "Match system", icon: "monitor", keywords: "auto theme", run: () => setThemeMode("auto") },
+      { id: "theme:light", group: "Theme", label: "Light", icon: "sun", keywords: "theme", run: () => setThemeMode("light") },
+      { id: "theme:dark", group: "Theme", label: "Dark", icon: "moon", keywords: "theme", run: () => setThemeMode("dark") },
+    );
+    return out;
+  };
+
   return (
-    <div className="mx-auto grid max-w-[1800px] gap-6 px-4 pb-16 pt-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:px-6">
-      <Sidebar data={data} view={view} items={items} onGo={go} />
+    <div className="mx-auto grid max-w-[1800px] gap-6 px-4 pb-16 pt-4 lg:grid-cols-[15.5rem_minmax(0,1fr)] lg:px-6">
+      <Sidebar data={data} view={view} items={items} onGo={go} onSearch={() => setPalette(true)} open={navOpen} onClose={() => setNavOpen(false)} />
 
       <main className="min-w-0">
-        <header className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <header className="sticky top-0 z-20 -mx-4 flex flex-wrap items-center gap-x-3 gap-y-3 border-b border-line bg-bg/80 px-4 py-3 backdrop-blur-md lg:-mx-6 lg:px-6">
+          <button type="button" onClick={() => setNavOpen(true)} aria-label="Open menu" className="rounded-lg border border-line-strong p-2 text-dim hover:text-fg lg:hidden">
+            <Icon name="menu" />
+          </button>
           <div className="min-w-0 flex-1">
-            <div className="text-xs text-accent">$ zorua usage{data ? ` · ${data.version}` : ""}</div>
-            <h1 className="truncate text-2xl font-bold leading-tight">{title}</h1>
+            <div className="truncate font-mono text-[11px] text-accent">$ zorua usage{data ? ` · ${data.version}` : ""}</div>
+            <h1 className="truncate text-xl font-semibold leading-tight tracking-tight">{title}</h1>
           </div>
-          <div className="flex flex-wrap gap-2.5">
-            {([["account", "+ account"], ["provider", "+ provider"], ["binding", "+ binding"]] as const).map(([k, label]) => (
-              <button key={k} type="button" onClick={() => setDialog({ kind: k })} className="rounded-md border border-accent px-3 py-1.5 text-xs text-accent hover:bg-accent/10">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setPalette(true)} aria-label="Search" className="rounded-lg border border-line-strong p-2 text-dim hover:text-fg lg:hidden">
+              <Icon name="search" />
+            </button>
+            {([["account", "account"], ["provider", "provider"], ["binding", "binding"]] as const).map(([k, label]) => (
+              <button key={k} type="button" onClick={() => setDialog({ kind: k })} className={`${outlineBtn} inline-flex items-center gap-1`}>
+                <Icon name="plus" className="size-3.5" />
                 {label}
               </button>
             ))}
-            <button type="button" onClick={() => load(true)} disabled={loading} className="rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-on-accent disabled:opacity-50">
+            <button type="button" onClick={() => load(true)} disabled={loading} className={`${primaryBtn} inline-flex items-center gap-1.5`}>
+              <Icon name="refresh" className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
               {loading ? "loading…" : "refresh"}
             </button>
           </div>
         </header>
 
-        <p className="mt-2 text-xs text-dim" aria-live="polite">
+        <p className="mt-4 flex items-center gap-2 text-xs text-dim" aria-live="polite">
+          <span className={`size-1.5 rounded-full ${res ? (res.stale || loading ? "animate-pulse bg-warn" : "bg-accent") : "animate-pulse bg-dim"}`} aria-hidden />
           {res ? `updated ${new Date(res.data.generated_at * 1000).toLocaleTimeString()}${res.stale ? " · refreshing" : ""}` : "reading accounts…"}
         </p>
-        {(err || res?.error) && <p className="mt-2 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{err ?? res?.error}</p>}
-        {notice && (
-          <p className="mt-2 flex items-center rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent" aria-live="polite">
-            {notice}
-            <button type="button" className="ml-auto text-dim underline" onClick={() => setNotice(null)}>
-              dismiss
-            </button>
-          </p>
-        )}
+        {(err || res?.error) && <p className={`mt-3 ${alertDanger}`}>{err ?? res?.error}</p>}
         {loginFor && <LoginBanner name={loginFor} onFinished={onLoginFinished} />}
 
         <div className="mt-6">
+          {!res && !err && <OverviewSkeleton />}
           {data && view.kind === "overview" && (
             <Overview
               data={data}
@@ -251,10 +328,23 @@ export default function Dashboard() {
             ))}
         </div>
 
-        <footer className="mt-10 text-xs text-dim">
+        <footer className="mt-12 border-t border-line pt-4 text-xs leading-relaxed text-dim">
           Data comes from <code className="text-fg">zorua usage --json</code>; changes run the matching <code className="text-fg">zorua</code> command. Account tokens never reach this page; a provider key is sent only when you press “show keys”.
         </footer>
       </main>
+
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
+        {notice && (
+          <div className="pointer-events-auto flex max-w-[34rem] animate-toast items-center gap-3 rounded-xl border border-line-strong bg-panel px-4 py-2.5 text-xs shadow-pop">
+            <Icon name="check" className="size-4 text-accent" />
+            <span className="min-w-0 break-words">{notice}</span>
+            <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="text-dim hover:text-fg">
+              <Icon name="close" className="size-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+      {palette && <Palette commands={commands()} onClose={() => setPalette(false)} />}
 
       {dialog?.kind === "account" && (
         <Modal title="Add account" onClose={() => setDialog(null)}>
@@ -311,7 +401,7 @@ export default function Dashboard() {
 
 function NotFound({ what, onBack }: { what: string; onBack: () => void }) {
   return (
-    <p className="rounded-md border border-line bg-panel px-4 py-3 text-sm text-dim">
+    <p className="rounded-lg border border-line bg-panel px-4 py-3 text-sm text-dim">
       No {what}.{" "}
       <button type="button" onClick={onBack} className="text-accent underline">
         back to overview

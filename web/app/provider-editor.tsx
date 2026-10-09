@@ -5,11 +5,11 @@ import type { Check, ProviderDoc } from "@/lib/types";
 import { CheckBadge } from "./check";
 import { CopyButton } from "./copy";
 import { act } from "./manage";
-import { actionBtn, dangerBtn } from "./ui";
+import { actionBtn, alertDanger, card, dangerBtn, ghostBtn } from "./ui";
 
 const field =
-  "w-full rounded-md border border-line bg-bg px-2 py-1 text-xs text-fg outline-none placeholder:text-dim/60 focus:border-accent";
-const ghost = "rounded-md border border-line px-3 py-1.5 text-xs text-dim hover:text-fg disabled:opacity-40";
+  "w-full rounded-lg border border-line-strong bg-bg px-2 py-1 font-mono text-xs text-fg outline-none transition-colors placeholder:text-dim/60 focus:border-accent";
+const ghost = ghostBtn;
 
 type Row = { id: number; k: string; v: string };
 type Status = { kind: "idle" } | { kind: "saving" } | { kind: "saved" } | { kind: "failed"; message: string };
@@ -97,7 +97,7 @@ function Table({
             <input aria-label={keyLabel} className={field} value={r.k} onChange={(e) => set(r.id, { k: e.target.value })} spellCheck={false} />
             <Value label={valueLabel} className={secret?.(r.k) ? "text-warn" : ""} value={r.v} onChange={(v) => set(r.id, { v })} />
             {copy && (secret?.(r.k) ? <CopyButton label={`copy ${r.k}`} get={() => copy(r)} /> : <span />)}
-            <button type="button" aria-label={`delete ${r.k || "row"}`} className="rounded-md border border-transparent py-1 text-dim hover:border-danger hover:text-danger" onClick={() => onChange(items.filter((x) => x.id !== r.id))}>
+            <button type="button" aria-label={`delete ${r.k || "row"}`} className="rounded-lg border border-transparent py-1 text-dim hover:border-danger hover:text-danger" onClick={() => onChange(items.filter((x) => x.id !== r.id))}>
               ×
             </button>
           </div>
@@ -315,7 +315,7 @@ export function ProviderPage({
 
   const commit = () => setTick((t) => t + 1);
 
-  if (loadError) return <p className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{loadError}</p>;
+  if (loadError) return <p className={alertDanger}>{loadError}</p>;
   if (!base) return <p className="text-xs text-dim">reading {name}…</p>;
 
   const claude = base.agent === "claude";
@@ -325,7 +325,7 @@ export function ProviderPage({
     <form onSubmit={(e) => e.preventDefault()} onBlur={commit} autoComplete="off">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="text-sm text-dim">
-          {claude ? "Claude Code" : "Codex"} provider · <span className="text-fg">{endpoint}</span>
+          {claude ? "Claude Code" : "Codex"} provider · <span className="font-mono text-[13px] text-fg">{endpoint}</span>
         </span>
         <span className="text-xs" aria-live="polite">
           {status.kind === "saving" ? (
@@ -353,7 +353,7 @@ export function ProviderPage({
       </p>
 
       {failure && (
-        <p className="mt-3 flex items-center gap-3 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+        <p className={`mt-3 flex items-center gap-3 ${alertDanger}`}>
           <span className="min-w-0 flex-1 break-words">{status.kind === "failed" ? `not saved: ${failure}` : failure}</span>
           {status.kind === "failed" && (
             <button type="button" className={ghost} onClick={commit}>
@@ -363,7 +363,7 @@ export function ProviderPage({
         </p>
       )}
 
-      <div className="mt-4 overflow-hidden rounded-[10px] border border-line bg-panel">
+      <div className={`mt-4 ${card}`}>
         <div className="grid gap-3 p-4">
           {claude ? (
             <>

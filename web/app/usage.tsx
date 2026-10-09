@@ -60,21 +60,21 @@ export function Bar({ w }: { w: UsageWindow }) {
   const p = Math.max(0, Math.min(100, w.used_percent ?? 0));
   return (
     <div className="min-w-0">
-      <div className="flex items-baseline justify-between gap-2 text-xs">
-        <span className="text-dim">{windowLabel(w.window_seconds)}</span>
-        <span className="tabular-nums">{p}%</span>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="rounded bg-line px-1.5 py-px font-mono text-[10px] font-medium tracking-wide text-dim">{windowLabel(w.window_seconds)}</span>
+        <span className={`text-sm font-semibold tabular-nums ${p >= 50 ? textColor(p) : ""}`}>{p}%</span>
       </div>
       <div
-        className="mt-1 h-1.5 overflow-hidden rounded-full bg-line"
+        className="mt-1.5 h-2 overflow-hidden rounded-full bg-line"
         role="progressbar"
         aria-valuenow={p}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={`${windowLabel(w.window_seconds)} usage`}
       >
-        <div className={`h-full ${barColor(p)}`} style={{ width: `${p}%` }} />
+        <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(p)}`} style={{ width: `${p}%` }} />
       </div>
-      {w.reset_after_seconds != null && <div className="mt-1 text-[11px] text-dim">resets in {span(w.reset_after_seconds)}</div>}
+      {w.reset_after_seconds != null && <div className="mt-1.5 text-[11px] text-dim">resets in {span(w.reset_after_seconds)}</div>}
     </div>
   );
 }
