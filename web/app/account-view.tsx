@@ -1,8 +1,7 @@
 import type { Account, Binding } from "@/lib/types";
 import { CopyButton, shellQuote } from "./copy";
+import { actionBtn, actionRow, dangerBtn } from "./ui";
 import { ago, Bar, PLAN_STYLE, usageNote } from "./usage";
-
-const linkBtn = "rounded-md border border-line px-3 py-1.5 text-xs text-dim hover:text-fg";
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -32,15 +31,13 @@ export function AccountView({ a, bindings, onLogin, onRemove, onUnbind }: { a: A
             <code>{a.home}</code>
           </Fact>
         </div>
-        <div className="mt-3 flex gap-2">
-          <button type="button" onClick={onLogin} className={linkBtn}>
+        <div className={actionRow}>
+          <button type="button" onClick={onLogin} className={actionBtn}>
             sign in again
           </button>
-          <span className={`${linkBtn} flex items-center`}>
-            <CopyButton variant="link" text="copy command" label={`copy: zorua use ${a.name}`} get={async () => `zorua use ${a.name}`} />
-          </span>
+          <CopyButton variant="action" text="copy command" label={`copy: zorua use ${a.name}`} get={async () => `zorua use ${a.name}`} />
           {a.name !== "default" && (
-            <button type="button" onClick={onRemove} className={`${linkBtn} hover:text-danger`}>
+            <button type="button" onClick={onRemove} className={dangerBtn}>
               remove
             </button>
           )}
@@ -65,14 +62,12 @@ export function AccountView({ a, bindings, onLogin, onRemove, onUnbind }: { a: A
         <div className="overflow-hidden rounded-[10px] border border-line bg-panel">
           {bindings.length ? (
             bindings.map((b) => (
-              <div key={b.dir} className="flex items-baseline gap-3 border-b border-line px-4 py-2 text-sm last:border-b-0">
+              <div key={b.dir} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3 text-sm last:border-b-0">
                 <span className="min-w-0 flex-1 truncate" title={b.dir}>
                   {b.dir}
                 </span>
-                <span className="text-[11px]">
-                  <CopyButton variant="link" text="copy command" label={`copy: zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
-                </span>
-                <button type="button" onClick={() => onUnbind(b.dir)} className="text-[11px] text-dim underline hover:text-danger">
+                <CopyButton variant="action" text="copy command" label={`copy: zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
+                <button type="button" onClick={() => onUnbind(b.dir)} className={dangerBtn}>
                   unbind
                 </button>
               </div>

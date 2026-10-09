@@ -1,6 +1,7 @@
 import type { Account, Binding, Check, Provider, ZoruaState } from "@/lib/types";
 import { attention, DOT, type Item } from "./attention";
 import { CheckBadge } from "./check";
+import { actionBtn, dangerBtn, rowActions } from "./ui";
 import { CopyButton, shellQuote } from "./copy";
 import { ago, Bar, PLAN_STYLE, usageNote } from "./usage";
 import type { View } from "./view";
@@ -11,14 +12,12 @@ function Panel({ title, count, action, children }: { title: string; count?: numb
       <h2 className="mb-3 flex items-baseline text-sm before:mr-2 before:text-accent before:content-['#']">
         {title}
         {count != null && <span className="ml-2 text-xs text-dim">{count}</span>}
-        {action && <span className="ml-auto text-[11px] font-normal">{action}</span>}
+        {action && <span className="ml-auto font-normal">{action}</span>}
       </h2>
       <div className="overflow-hidden rounded-[10px] border border-line bg-panel">{children}</div>
     </section>
   );
 }
-
-const linkBtn = "text-dim underline hover:text-accent";
 
 function Attention({ items, onOpen }: { items: Item[]; onOpen: (v: View) => void }) {
   if (items.length === 0) return <p className="mb-6 text-xs text-dim">✓ nothing needs attention</p>;
@@ -43,7 +42,7 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
   const ws = a.usage.windows;
   const note = usageNote(a);
   return (
-    <li className="grid grid-cols-1 gap-3 border-b border-line px-4 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+    <li className="grid grid-cols-1 gap-4 border-b border-line px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
       <div className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <button type="button" onClick={onOpen} className="font-bold text-accent hover:underline">
@@ -56,17 +55,6 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
         </div>
         <div className="truncate text-[11px] text-dim/70" title={a.home}>
           {a.home}
-        </div>
-        <div className="mt-2 flex gap-3 text-[11px]">
-          <button type="button" onClick={onLogin} className={linkBtn}>
-            sign in
-          </button>
-          <CopyButton variant="link" text="copy command" label={`copy: zorua use ${a.name}`} get={async () => `zorua use ${a.name}`} />
-          {a.name !== "default" && (
-            <button type="button" onClick={onRemove} className="text-dim underline hover:text-danger">
-              remove
-            </button>
-          )}
         </div>
       </div>
       <div>
@@ -82,6 +70,17 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
         {ws.length > 0 && a.usage.age_seconds != null && <div className="mt-2 text-[11px] text-dim">from its last session, {ago(a.usage.age_seconds)}</div>}
         {ws.length > 0 && note && <div className="mt-2 text-[11px] text-danger">{note}</div>}
       </div>
+      <div className={rowActions}>
+        <button type="button" onClick={onLogin} className={actionBtn}>
+          sign in
+        </button>
+        <CopyButton variant="action" text="copy command" label={`copy: zorua use ${a.name}`} get={async () => `zorua use ${a.name}`} />
+        {a.name !== "default" && (
+          <button type="button" onClick={onRemove} className={dangerBtn}>
+            remove
+          </button>
+        )}
+      </div>
     </li>
   );
 }
@@ -89,22 +88,13 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
 function ProviderRow({ p, check, checking, onOpen, onCheck, onRemove }: { p: Provider; check?: Check; checking: boolean; onOpen: () => void; onCheck: () => void; onRemove: () => void }) {
   const models = Object.keys(p.models);
   return (
-    <li className="grid grid-cols-1 gap-1 border-b border-line px-4 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+    <li className="grid grid-cols-1 gap-4 border-b border-line px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
       <div className="min-w-0">
         <button type="button" onClick={onOpen} className="font-bold text-accent hover:underline">
           {p.name}
         </button>
         <span className="ml-2 text-[11px] text-dim">{p.agent}</span>
         <div className="truncate text-xs text-dim">{p.endpoint}</div>
-        <div className="mt-1 flex gap-3 text-[11px]">
-          <button type="button" onClick={onOpen} className={linkBtn}>
-            view &amp; edit
-          </button>
-          <CopyButton variant="link" text="copy command" label={`copy: zorua use ${p.name}`} get={async () => `zorua use ${p.name}`} />
-          <button type="button" onClick={onRemove} className="text-dim underline hover:text-danger">
-            remove
-          </button>
-        </div>
       </div>
       <div className="min-w-0 text-xs text-dim">
         <CheckBadge check={check} checking={checking} onCheck={onCheck} />
@@ -112,21 +102,28 @@ function ProviderRow({ p, check, checking, onOpen, onCheck, onRemove }: { p: Pro
           {models.length === 0 ? "no model catalog" : `${models.length} model${models.length === 1 ? "" : "s"}: ${models.slice(0, 4).join(", ")}${models.length > 4 ? " …" : ""}`}
         </div>
       </div>
+      <div className={rowActions}>
+        <button type="button" onClick={onOpen} className={actionBtn}>
+          view &amp; edit
+        </button>
+        <CopyButton variant="action" text="copy command" label={`copy: zorua use ${p.name}`} get={async () => `zorua use ${p.name}`} />
+        <button type="button" onClick={onRemove} className={dangerBtn}>
+          remove
+        </button>
+      </div>
     </li>
   );
 }
 
 function BindingRow({ b, onRemove }: { b: Binding; onRemove: () => void }) {
   return (
-    <li className="flex flex-wrap items-baseline gap-x-3 border-b border-line px-4 py-3 last:border-b-0">
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3 last:border-b-0">
       <span className="min-w-0 flex-1 truncate text-sm" title={b.dir}>
         {b.dir}
       </span>
       <span className="text-xs text-accent">→ {b.name}</span>
-      <span className="text-[11px]">
-        <CopyButton variant="link" text="copy command" label={`copy: zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
-      </span>
-      <button type="button" onClick={onRemove} className="text-[11px] text-dim underline hover:text-danger">
+      <CopyButton variant="action" text="copy command" label={`copy: zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
+      <button type="button" onClick={onRemove} className={dangerBtn}>
         unbind
       </button>
     </li>
@@ -180,7 +177,7 @@ export function Overview({
           count={providers.length}
           action={
             providers.length > 0 && (
-              <button type="button" onClick={onCheckAll} disabled={checking.size > 0} className="text-dim underline hover:text-accent disabled:opacity-50">
+              <button type="button" onClick={onCheckAll} disabled={checking.size > 0} className={actionBtn}>
                 {checking.size > 0 ? "checking…" : "check all"}
               </button>
             )

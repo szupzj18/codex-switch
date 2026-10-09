@@ -5,6 +5,7 @@ import type { Check, ProviderDoc } from "@/lib/types";
 import { CheckBadge } from "./check";
 import { CopyButton } from "./copy";
 import { act } from "./manage";
+import { actionBtn, dangerBtn } from "./ui";
 
 const field =
   "w-full rounded-md border border-line bg-bg px-2 py-1 text-xs text-fg outline-none placeholder:text-dim/60 focus:border-accent";
@@ -90,19 +91,19 @@ function Table({
   const set = (id: number, patch: Partial<Row>) => onChange(items.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   return (
     <div>
-      <div className={`grid ${copy ? "grid-cols-[minmax(9rem,20rem)_minmax(0,1fr)_auto_1.5rem]" : "grid-cols-[minmax(9rem,20rem)_minmax(0,1fr)_1.5rem]"} items-start gap-x-2 gap-y-1.5`}>
+      <div className={`grid ${copy ? "grid-cols-[minmax(9rem,20rem)_minmax(0,1fr)_auto_2rem]" : "grid-cols-[minmax(9rem,20rem)_minmax(0,1fr)_2rem]"} items-start gap-x-3 gap-y-2.5`}>
         {items.map((r) => (
           <div key={r.id} className="contents">
             <input aria-label={keyLabel} className={field} value={r.k} onChange={(e) => set(r.id, { k: e.target.value })} spellCheck={false} />
             <Value label={valueLabel} className={secret?.(r.k) ? "text-warn" : ""} value={r.v} onChange={(v) => set(r.id, { v })} />
             {copy && (secret?.(r.k) ? <CopyButton label={`copy ${r.k}`} get={() => copy(r)} /> : <span />)}
-            <button type="button" aria-label={`delete ${r.k || "row"}`} className="py-1 text-dim hover:text-danger" onClick={() => onChange(items.filter((x) => x.id !== r.id))}>
+            <button type="button" aria-label={`delete ${r.k || "row"}`} className="rounded-md border border-transparent py-1 text-dim hover:border-danger hover:text-danger" onClick={() => onChange(items.filter((x) => x.id !== r.id))}>
               ×
             </button>
           </div>
         ))}
       </div>
-      <button type="button" className="mt-3 text-xs text-dim underline hover:text-accent" onClick={() => onChange([...items, { id: nextId++, k: "", v: "" }])}>
+      <button type="button" className={`mt-4 ${actionBtn}`} onClick={() => onChange([...items, { id: nextId++, k: "", v: "" }])}>
         + {addLabel}
       </button>
     </div>
@@ -322,7 +323,7 @@ export function ProviderPage({
   const other = env.filter((r) => !isBasic(r.k));
   return (
     <form onSubmit={(e) => e.preventDefault()} onBlur={commit} autoComplete="off">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="text-sm text-dim">
           {claude ? "Claude Code" : "Codex"} provider · <span className="text-fg">{endpoint}</span>
         </span>
@@ -336,17 +337,17 @@ export function ProviderPage({
           ) : null}
         </span>
         <CheckBadge check={check} checking={checking} onCheck={onCheck} />
-        <span className="ml-auto flex gap-4 text-xs">
-          <CopyButton variant="link" text="copy command" label={`copy: zorua use ${name}`} get={async () => `zorua use ${name}`} />
-          <button type="button" className="text-dim underline hover:text-accent" onClick={toggleReveal}>
+        <span className="ml-auto flex flex-wrap items-center gap-2">
+          <CopyButton variant="action" text="copy command" label={`copy: zorua use ${name}`} get={async () => `zorua use ${name}`} />
+          <button type="button" className={actionBtn} onClick={toggleReveal}>
             {revealed ? "hide keys" : "show keys"}
           </button>
-          <button type="button" className="text-dim underline hover:text-danger" onClick={onRemove}>
+          <button type="button" className={dangerBtn} onClick={onRemove}>
             remove provider
           </button>
         </span>
       </div>
-      <p className="mt-1 text-[11px] text-dim">
+      <p className="mt-3 text-xs leading-relaxed text-dim">
         {claude ? "What `claude` runs with while this provider is active." : "Codex gets this endpoint, key and model through -c overrides."} Changes are saved when you leave a field; the previous file is kept as
         providers.json.bak. Keys are masked until <b className="text-fg">show keys</b>.
       </p>

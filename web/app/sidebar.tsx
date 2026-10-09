@@ -11,7 +11,7 @@ function Item({ active, onClick, children, right, tone }: { active: boolean; onC
         type="button"
         onClick={onClick}
         aria-current={active ? "page" : undefined}
-        className={`flex w-full items-baseline justify-between gap-2 border-l-2 px-3 py-1.5 text-left text-sm ${active ? "border-accent bg-accent/10 text-accent" : "border-transparent text-fg hover:bg-line/50"}`}
+        className={`flex w-full items-baseline justify-between gap-2 border-l-2 px-3 py-2 text-left text-sm ${active ? "border-accent bg-accent/10 text-accent" : "border-transparent text-fg hover:bg-line/50"}`}
       >
         <span className="min-w-0 truncate">
           {tone && <span className={`mr-1.5 inline-block size-1.5 rounded-full align-middle ${DOT[tone]}`} role="img" aria-label="needs attention" />}
