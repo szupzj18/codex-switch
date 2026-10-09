@@ -12,7 +12,7 @@ export type Account = {
   email: string | null;
   plan: string | null;
   until: string | null;
-  usage: { windows: UsageWindow[]; error: string | null; age_seconds: number | null };
+  usage: { windows: UsageWindow[]; error: string | null; age_seconds: number | null; /** Claude accounts: is the status-line relay installed (null for Codex, absent from an older zorua) */ relay?: boolean | null };
 };
 
 export type Provider = {

@@ -5,7 +5,7 @@ import { ago, Bar, PLAN_STYLE, usageNote } from "./usage";
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2 border-b border-line px-4 py-2 text-sm last:border-b-0">
+    <div className="grid grid-cols-[10.5rem_minmax(0,1fr)] gap-2 border-b border-line px-4 py-2 text-sm last:border-b-0">
       <span className="text-xs text-dim">{label}</span>
       <span className="min-w-0 break-all">{children}</span>
     </div>
