@@ -371,6 +371,8 @@ not_contains "$out" "tok-relay-123456789" "import never prints keys"
 zorua provider import cc-switch --db "$TMP/ccswitch.db" >/dev/null
 contains "$(zorua provider show super-relay)" "ANTHROPIC_MODEL=m1" "imported env is kept"
 contains "$(zorua provider show deepseek-codex)" "model=ds-flash" "imported codex provider is kept (renamed on a name clash)"
+contains "$(zorua provider models deepseek-codex)" "ds-flash" "imported codex provider has its model catalog"
+contains "$(zorua provider models super-relay)" "m1" "claude catalog is built from the role mapping"
 contains "$(zorua provider show deepseek-codex)" "agent=codex" "imported codex agent"
 contains "$(zorua provider show deepseek)" "agent=claude" "the claude provider keeps the plain name"
 out=$(zorua provider import cc-switch --db "$TMP/ccswitch.db")
@@ -412,5 +414,79 @@ cd "$TMP"; zorua apply "$PWD"
 zorua unbind "$TMP/cproj" >/dev/null
 zorua provider rm ds >/dev/null
 ok "codex providers: independent slot, env key, -c overrides, bind"
+
+# ---- provider models: many models per provider, one picked per shell -----------
+
+echo sk-rel-secret-123456 | zorua provider add rel --base-url https://relay.example.com --model default=m/default --model opus="m/opus[1M]" >/dev/null
+out=$(zorua provider models rel)
+contains "$out" "m/default" "models seeded from the role mapping"
+contains "$out" "m/opus[1M]" "ids with a [1M] suffix are kept verbatim"
+contains "$out" "opus " "short alias derived from the id"
+zorua provider models rel add vendor/extra-model extra >/dev/null
+zorua provider models rel add vendor/other-model >/dev/null
+fails zorua provider models rel add vendor/extra-model
+fails zorua provider models rel add vendor/x extra
+contains "$(zorua provider ls)" "4 models" "model count in the provider list"
+zorua use rel:extra >/dev/null
+[ "$ZORUA_CLAUDE_PROVIDER" = rel ] && [ "$ZORUA_CLAUDE_MODEL" = extra ] || die "use <provider>:<model> did not set provider and model"
+contains "$ZORUA_PROMPT_TEXT" "claude-provider:rel/extra" "model in the prompt marker"
+out=$(PATH="$TMP/cbin:$PATH" claude hi)
+contains "$out" '"ANTHROPIC_MODEL": "vendor/extra-model"' "picked model reaches claude"
+zorua model other >/dev/null           # unambiguous prefix of an alias
+[ "$ZORUA_CLAUDE_MODEL" = other-model ] || die "zorua model <prefix> failed: $ZORUA_CLAUDE_MODEL"
+out=$(zorua model)
+contains "$out" "● other-model" "zorua model marks the picked model"
+fails zorua model nope
+[ "$ZORUA_CLAUDE_MODEL" = other-model ] || die "a failed pick must not change the selection"
+fails zorua use rel:nope
+zorua model - >/dev/null
+[ -z "${ZORUA_CLAUDE_MODEL:-}" ] || die "model - did not clear the pick"
+out=$(PATH="$TMP/cbin:$PATH" claude hi)
+contains "$out" '"ANTHROPIC_MODEL": "m/default"' "without a pick the provider's own default model is used"
+out=$(PATH="$TMP/cbin:$PATH" zorua rel:extra hi)
+contains "$out" '"ANTHROPIC_MODEL": "vendor/extra-model"' "one-shot provider:model"
+fails zorua rel:nope hi
+zorua use rel:extra >/dev/null
+echo sk-oth-secret-123456 | zorua provider add oth --base-url https://o.example.com --model default=o/m >/dev/null
+zorua use oth >/dev/null
+[ -z "${ZORUA_CLAUDE_MODEL:-}" ] || die "switching provider must drop the previous provider's model pick"
+zorua provider models rel rm extra >/dev/null
+fails zorua use rel:extra
+zorua use rel:other >/dev/null; zorua provider models rel rm other-model >/dev/null
+out=$(PATH="$TMP/cbin:$PATH" claude hi 2>&1)
+contains "$out" "not in this provider's list" "a removed model falls back with a warning"
+contains "$out" '"ANTHROPIC_MODEL": "m/default"' "removed pick falls back to the default model"
+# codex: the pick becomes the -c model override
+echo sk-dx-secret-123456 | zorua provider add dx --codex --base-url https://api.dx.example.com --model dx-flash >/dev/null
+zorua provider models dx add dx-pro pro >/dev/null
+zorua use dx:pro >/dev/null
+out=$(PATH="$TMP/bin:$PATH" codex exec hi)
+contains "$out" 'model="dx-pro"' "codex picked model"
+not_contains "$out" 'model="dx-flash"' "codex default model is replaced"
+zorua model - >/dev/null
+out=$(PATH="$TMP/bin:$PATH" codex exec hi)
+contains "$out" 'model="dx-flash"' "codex default model without a pick"
+zorua use - >/dev/null
+# fetch: ask the endpoint for its model list (a local stand-in server)
+PORT=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
+mkdir -p "$TMP/srv/v1"
+echo '{"data":[{"id":"srv/model-a"},{"id":"srv/model-b[1M]"},{"id":"m/default"}]}' > "$TMP/srv/v1/models"
+cp "$TMP/srv/v1/models" "$TMP/srv/models"
+python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$TMP/srv" >/dev/null 2>&1 &
+SRV=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do python3 -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:$PORT/models')" 2>/dev/null && break; sleep 0.5; done
+echo sk-f-secret-123456 | zorua provider add fet --base-url "http://127.0.0.1:$PORT" --model default=m/default >/dev/null
+out=$(zorua provider models fet fetch)
+contains "$out" "offers 3 model(s); 2 new" "fetch reports what is new"
+contains "$out" "model-a" "fetched model listed"
+contains "$(zorua provider models fet)" "srv/model-b[1M]" "fetched ids kept verbatim"
+out=$(zorua provider models fet fetch)
+contains "$out" "0 new" "fetching again adds nothing"
+echo sk-g-secret-123456 | zorua provider add fetx --codex --base-url "http://127.0.0.1:$PORT" --model srv/model-a >/dev/null
+contains "$(zorua provider models fetx fetch)" "offers 3 model(s)" "codex fetch uses /models"
+zorua provider add bad --base-url "http://127.0.0.1:1" --key k --model default=x >/dev/null
+fails zorua provider models bad fetch
+kill $SRV 2>/dev/null; wait $SRV 2>/dev/null || true
+ok "provider models: catalog, pick per shell, fetch"
 
 echo "All $n bash smoke checks passed."

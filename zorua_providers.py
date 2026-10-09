@@ -18,6 +18,8 @@ import json
 import os
 import re
 import sqlite3
+import urllib.error
+import urllib.request
 
 # Roles accepted by `--model ROLE=ID`.
 MODEL_VARS = {
@@ -56,7 +58,7 @@ def _write_private(path, text):
 
 
 def save(cfg, providers):
-    _write_private(_file(cfg), json.dumps({"providers": providers}, indent=2, sort_keys=True) + "\n")
+    _write_private(_file(cfg), json.dumps({"providers": providers}, indent=2) + "\n")
 
 
 AGENTS = ("claude", "codex")
@@ -79,9 +81,99 @@ def secret(p):
 
 
 def model_summary(p):
+    cat = models(p)
+    if cat:
+        return "%d model%s" % (len(cat), "" if len(cat) == 1 else "s")
     if agent(p) == "claude":
         return ",".join(r for r, v in MODEL_VARS.items() if v in p["env"]) or "-"
     return p.get("model") or "-"
+
+
+# --------------------------------------------------------------------------
+# Model catalog: a provider can know many models; one is picked per shell
+# --------------------------------------------------------------------------
+
+def models(p):
+    """-> {alias: model id}, in the order they were added"""
+    return dict(p.get("models") or {})
+
+
+def make_alias(model_id, taken=()):
+    """Short typeable name for a model id: the last path segment without a [1M]-style suffix."""
+    base = re.sub(r"\[[^\]]*\]$", "", model_id.rstrip("/")).rsplit("/", 1)[-1]
+    alias = re.sub(r"[^A-Za-z0-9_.-]+", "-", base).strip("-").lower() or "model"
+    cand, n = alias, 2
+    while cand in taken:
+        cand, n = "%s-%d" % (alias, n), n + 1
+    return cand
+
+
+def add_models(p, ids):
+    """Add model ids (skipping ones already listed); -> number added"""
+    cat = models(p)
+    known = set(cat.values())
+    added = 0
+    for mid in ids:
+        if mid and mid not in known:
+            cat[make_alias(mid, cat)] = mid
+            known.add(mid)
+            added += 1
+    if added:
+        p["models"] = cat
+    return added
+
+
+def resolve_model(p, sel):
+    """-> model id for an alias, a full id, or an unambiguous alias prefix; None when unknown"""
+    cat = models(p)
+    if sel in cat:
+        return cat[sel]
+    if sel in cat.values():
+        return sel
+    hits = [i for a, i in cat.items() if a.startswith(sel)]
+    return hits[0] if len(set(hits)) == 1 else None
+
+
+def selected_alias(p, model_id):
+    return next((a for a, i in models(p).items() if i == model_id), model_id)
+
+
+def env_models(env):
+    """distinct model ids named in a Claude provider's env (roles + default + subagent), in order"""
+    seen = []
+    for var in MODEL_VARS.values():
+        v = env.get(var)
+        if v and v not in seen:
+            seen.append(v)
+    return seen
+
+
+def models_url(p):
+    base = (p["env"].get("ANTHROPIC_BASE_URL", "") if agent(p) == "claude" else p.get("base_url", "")).rstrip("/")
+    if agent(p) == "claude":
+        return base + ("/models" if base.endswith("/v1") else "/v1/models") + "?limit=1000"
+    return base + "/models"
+
+
+def fetch_models(p, timeout=15):
+    """GET the endpoint's model list (Anthropic and OpenAI style both answer {"data": [{"id": ...}]})."""
+    headers = {"User-Agent": "zorua"}
+    if agent(p) == "claude":
+        var = key_var(p["env"])
+        headers["anthropic-version"] = "2023-06-01"
+        headers["x-api-key" if var == "ANTHROPIC_API_KEY" else "Authorization"] = (
+            p["env"][var] if var == "ANTHROPIC_API_KEY" else "Bearer " + p["env"].get(var, ""))
+    else:
+        headers["Authorization"] = "Bearer " + p.get("key", "")
+    req = urllib.request.Request(models_url(p), headers=headers)
+    try:
+        data = json.load(urllib.request.urlopen(req, timeout=timeout))
+    except urllib.error.HTTPError as e:
+        raise RuntimeError("HTTP %d from %s" % (e.code, models_url(p).split("?")[0]))
+    except Exception as e:
+        raise RuntimeError("%s: %s" % (models_url(p).split("?")[0], getattr(e, "reason", e)))
+    ids = [m.get("id") for m in (data.get("data") or []) if isinstance(m, dict)]
+    return [i for i in ids if i]
 
 
 def is_secret(var):
@@ -172,14 +264,14 @@ def build_codex(base_url, key, model, wire_api="responses"):
     return {"kind": "codex", "base_url": base_url.rstrip("/"), "key": key, "model": model, "wire_api": wire_api}
 
 
-def codex_args(name, p):
+def codex_args(name, p, model=None):
     """-c overrides that make codex use provider `p` (the table key is the provider name)."""
     table = "zorua_%s" % name.replace("-", "_")
     inline = "{name=%s, base_url=%s, wire_api=%s, env_key=%s}" % (
         _toml_str(name), _toml_str(p["base_url"]), _toml_str(p.get("wire_api", "responses")), _toml_str(CODEX_KEY_VAR))
     return ["-c", "model_provider=%s" % _toml_str(table),
             "-c", "model_providers.%s=%s" % (table, inline),
-            "-c", "model=%s" % _toml_str(p["model"])]
+            "-c", "model=%s" % _toml_str(model or p["model"])]
 
 
 def codex_env(base, p):
@@ -236,7 +328,13 @@ def cc_switch_codex_providers(db):
             continue
         if not key or not parsed:
             continue
-        out.append((name, build_codex(parsed[1], key, parsed[0], parsed[2])))
+        prov = build_codex(parsed[1], key, parsed[0], parsed[2])
+        try:
+            listed = [m.get("model") for m in ((c.get("modelCatalog") or {}).get("models") or [])]
+        except AttributeError:
+            listed = []
+        add_models(prov, [parsed[0]] + listed)
+        out.append((name, prov))
     return out
 
 

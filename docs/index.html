@@ -114,7 +114,7 @@ window 3  <span class="g">client-acme</span></pre>
     <li><b>bind on cd</b> — <code>zorua bind work</code> and the repo switches automatically</li>
     <li><b>usage</b> — one-line-per-account board with 5h/7d bars; <code>-v</code> for details and credits</li>
     <li><b>Codex and Claude Code</b> — <code>zorua add --claude alt</code> gives a Claude subscription its own <code>CLAUDE_CONFIG_DIR</code>; one table, one set of commands</li>
-    <li><b>providers</b> — third-party endpoints (GLM, Kimi, DeepSeek, a relay) for Claude Code <i>and</i> Codex, one slot per agent per terminal; import from cc-switch with <code>zorua provider import cc-switch</code></li>
+    <li><b>providers</b> — third-party endpoints (GLM, Kimi, DeepSeek, a relay) for Claude Code <i>and</i> Codex, one slot per agent per terminal, many models per provider (<code>zorua model</code>); import from cc-switch with <code>zorua provider import cc-switch</code></li>
     <li><b>any shell</b> — zsh, bash and fish, same commands and the same auto-switch on cd</li>
     <li><b>zero deps</b> — Python 3.8+ standard library only, nothing to pip install</li>
   </ul>
@@ -130,6 +130,9 @@ window 3  <span class="g">client-acme</span></pre>
 <span class="g">$</span> zorua provider add deepseek --codex --base-url https://api.deepseek.com --model deepseek-v4-flash
 <span class="g">$</span> zorua use kimi           <span class="d"># plain `claude` in this shell runs on kimi</span>
 <span class="g">$</span> zorua use deepseek       <span class="d"># plain `codex` runs on deepseek, at the same time</span>
+<span class="g">$</span> zorua provider models kimi fetch   <span class="d"># a relay may serve a dozen models</span>
+<span class="g">$</span> zorua use kimi:k3            <span class="d"># provider and model in one go</span>
+<span class="g">$</span> zorua model                  <span class="d"># list, ● marks the picked one</span>
 <span class="g">$</span> zorua provider import cc-switch --dry-run</pre></div>
   <p>Each agent has its own provider slot. Claude Code is started with <code>--settings</code> (a private file, so the key never shows in <code>ps</code> and <code>settings.json</code> is never written); Codex gets <code>-c</code> overrides and its key in an environment variable. No proxy, no daemon. Skills, plugins, MCP servers, hooks and every other setting stay as they are; only the provider's own settings are overridden.</p>
 

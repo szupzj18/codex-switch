@@ -172,5 +172,33 @@ zorua provider rm ds >/dev/null; or die "codex provider rm failed"
 ok "codex providers: independent slot, env key, -c overrides"
 set -gx PATH $oldpath
 
+# ---- provider models: many models per provider, one picked per shell -----------
+set -gx PATH $tmp/cbin $tmp/bin $PATH
+echo sk-rel-secret-123456 | zorua provider add rel --base-url https://relay.example.com --model default=m/default --model opus="m/opus[1M]" >/dev/null; or die "provider add (models) failed"
+contains_str (zorua provider models rel | string collect) "m/opus[1M]" "ids with a [1M] suffix are kept verbatim"
+zorua provider models rel add vendor/extra-model extra >/dev/null; or die "models add failed"
+zorua provider models rel add vendor/x extra 2>/dev/null; and die "duplicate alias should fail"
+contains_str (zorua provider ls | string collect) "3 models" "model count in the provider list"
+zorua use rel:extra >/dev/null
+test "$ZORUA_CLAUDE_PROVIDER" = rel -a "$ZORUA_CLAUDE_MODEL" = extra; or die "use <provider>:<model> did not set both"
+contains_str $ZORUA_PROMPT_TEXT "claude-provider:rel/extra" "model in the prompt marker"
+contains_str (claude hi | string collect) '"ANTHROPIC_MODEL": "vendor/extra-model"' "picked model reaches claude"
+zorua use rel:nope 2>/dev/null; and die "unknown model should fail"
+test "$ZORUA_CLAUDE_MODEL" = extra; or die "a failed pick must not change the selection"
+zorua model - >/dev/null
+test -z "$ZORUA_CLAUDE_MODEL"; or die "model - did not clear the pick"
+contains_str (claude hi | string collect) '"ANTHROPIC_MODEL": "m/default"' "provider's own default without a pick"
+zorua use rel:extra >/dev/null
+echo sk-oth-secret-123456 | zorua provider add oth --base-url https://o.example.com --model default=o/m >/dev/null
+zorua use oth >/dev/null
+test -z "$ZORUA_CLAUDE_MODEL"; or die "switching provider must drop the previous model pick"
+echo sk-dx-secret-123456 | zorua provider add dx --codex --base-url https://api.dx.example.com --model dx-flash >/dev/null
+zorua provider models dx add dx-pro pro >/dev/null
+zorua use dx:pro >/dev/null
+contains_str (codex exec hi | string collect) 'model="dx-pro"' "codex picked model"
+zorua use - >/dev/null
+set -gx PATH $oldpath
+ok "provider models: catalog and pick per shell"
+
 rm -rf $tmp
 echo "All $n fish smoke checks passed."
