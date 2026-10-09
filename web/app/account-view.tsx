@@ -1,5 +1,5 @@
 import type { Account, Binding } from "@/lib/types";
-import { CopyButton } from "./copy";
+import { CopyButton, shellQuote } from "./copy";
 import { ago, Bar, PLAN_STYLE, usageNote } from "./usage";
 
 const linkBtn = "rounded-md border border-line px-3 py-1.5 text-xs text-dim hover:text-fg";
@@ -13,7 +13,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-export function AccountView({ a, bindings, onLogin, onRemove }: { a: Account; bindings: Binding[]; onLogin: () => void; onRemove: () => void }) {
+export function AccountView({ a, bindings, onLogin, onRemove, onUnbind }: { a: Account; bindings: Binding[]; onLogin: () => void; onRemove: () => void; onUnbind: (dir: string) => void }) {
   const ws = a.usage.windows;
   const note = usageNote(a);
   return (
@@ -65,8 +65,16 @@ export function AccountView({ a, bindings, onLogin, onRemove }: { a: Account; bi
         <div className="overflow-hidden rounded-[10px] border border-line bg-panel">
           {bindings.length ? (
             bindings.map((b) => (
-              <div key={b.dir} className="truncate border-b border-line px-4 py-2 text-sm last:border-b-0" title={b.dir}>
-                {b.dir}
+              <div key={b.dir} className="flex items-baseline gap-3 border-b border-line px-4 py-2 text-sm last:border-b-0">
+                <span className="min-w-0 flex-1 truncate" title={b.dir}>
+                  {b.dir}
+                </span>
+                <span className="text-[11px]">
+                  <CopyButton variant="link" text="copy command" label={`copy: zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
+                </span>
+                <button type="button" onClick={() => onUnbind(b.dir)} className="text-[11px] text-dim underline hover:text-danger">
+                  unbind
+                </button>
               </div>
             ))
           ) : (

@@ -1,9 +1,10 @@
 import type { ZoruaState } from "@/lib/types";
+import { DOT, type Item as Attn } from "./attention";
 import { ThemeSwitch } from "./theme";
 import { peak, textColor } from "./usage";
 import { sameView, type View } from "./view";
 
-function Item({ active, onClick, children, right }: { active: boolean; onClick: () => void; children: React.ReactNode; right?: React.ReactNode }) {
+function Item({ active, onClick, children, right, tone }: { active: boolean; onClick: () => void; children: React.ReactNode; right?: React.ReactNode; tone?: Attn["tone"] }) {
   return (
     <li>
       <button
@@ -12,7 +13,10 @@ function Item({ active, onClick, children, right }: { active: boolean; onClick: 
         aria-current={active ? "page" : undefined}
         className={`flex w-full items-baseline justify-between gap-2 border-l-2 px-3 py-1.5 text-left text-sm ${active ? "border-accent bg-accent/10 text-accent" : "border-transparent text-fg hover:bg-line/50"}`}
       >
-        <span className="min-w-0 truncate">{children}</span>
+        <span className="min-w-0 truncate">
+          {tone && <span className={`mr-1.5 inline-block size-1.5 rounded-full align-middle ${DOT[tone]}`} role="img" aria-label="needs attention" />}
+          {children}
+        </span>
         {right}
       </button>
     </li>
@@ -28,8 +32,11 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-export function Sidebar({ data, view, onGo }: { data: ZoruaState | undefined; view: View; onGo: (v: View) => void }) {
+export function Sidebar({ data, view, items, onGo }: { data: ZoruaState | undefined; view: View; items: Attn[]; onGo: (v: View) => void }) {
   const at = (v: View) => sameView(view, v);
+  // The worst item per entry (items arrive worst first).
+  const tones = new Map<string, Attn["tone"]>();
+  for (const i of items) if (!tones.has(i.key)) tones.set(i.key, i.tone);
   const accounts = (agent: "codex" | "claude") =>
     data?.accounts
       .filter((a) => a.agent === agent)
@@ -38,6 +45,7 @@ export function Sidebar({ data, view, onGo }: { data: ZoruaState | undefined; vi
         return (
           <Item
             key={a.name}
+            tone={tones.get(`a:${a.name}`)}
             active={at({ kind: "account", name: a.name })}
             onClick={() => onGo({ kind: "account", name: a.name })}
             right={p != null ? <span className={`text-[11px] tabular-nums ${textColor(p)}`}>{p}%</span> : a.state === "none" ? <span className="text-[11px] text-dim">–</span> : undefined}
@@ -67,7 +75,7 @@ export function Sidebar({ data, view, onGo }: { data: ZoruaState | undefined; vi
           <Group title="Claude Code">{accounts("claude")}</Group>
           <Group title="Providers">
             {data.providers.map((p) => (
-              <Item key={p.name} active={at({ kind: "provider", name: p.name })} onClick={() => onGo({ kind: "provider", name: p.name })} right={<span className="text-[10px] text-dim">{p.agent}</span>}>
+              <Item key={p.name} tone={tones.get(`p:${p.name}`)} active={at({ kind: "provider", name: p.name })} onClick={() => onGo({ kind: "provider", name: p.name })} right={<span className="text-[10px] text-dim">{p.agent}</span>}>
                 {p.name}
               </Item>
             ))}

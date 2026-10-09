@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Account, Check, StateResponse } from "@/lib/types";
 import { AccountView } from "./account-view";
+import { attention } from "./attention";
 import { checkProvider, newest } from "./check";
 import { act, AddAccountForm, AddBindingForm, AddProviderForm, LoginBanner, Modal, RemoveAccountForm } from "./manage";
 import { Overview } from "./overview";
@@ -129,6 +130,11 @@ export default function Dashboard() {
   }, [load]);
 
   const data = res?.data;
+  const items = useMemo(() => (data ? attention(data, checks) : []), [data, checks]);
+  // The tab title carries the count, so a pinned tab shows when something needs a look.
+  useEffect(() => {
+    document.title = `${items.length ? `(${items.length}) ` : ""}Zorua — accounts and usage`;
+  }, [items.length]);
   const startLogin = async (a: Account) => {
     try {
       const r = await act({ action: "account.login", name: a.name });
@@ -169,7 +175,7 @@ export default function Dashboard() {
 
   return (
     <div className="mx-auto grid max-w-[1800px] gap-6 px-4 pb-16 pt-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:px-6">
-      <Sidebar data={data} view={view} onGo={go} />
+      <Sidebar data={data} view={view} items={items} onGo={go} />
 
       <main className="min-w-0">
         <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -220,7 +226,7 @@ export default function Dashboard() {
           )}
           {data && view.kind === "account" &&
             (account ? (
-              <AccountView a={account} bindings={data.bindings.filter((b) => b.name === account.name)} onLogin={() => startLogin(account)} onRemove={() => setDialog({ kind: "remove-account", a: account })} />
+              <AccountView a={account} bindings={data.bindings.filter((b) => b.name === account.name)} onLogin={() => startLogin(account)} onRemove={() => setDialog({ kind: "remove-account", a: account })} onUnbind={(dir) => setDialog({ kind: "unbind", dir })} />
             ) : (
               <NotFound what={`account '${view.name}'`} onBack={() => go({ kind: "overview" })} />
             ))}
