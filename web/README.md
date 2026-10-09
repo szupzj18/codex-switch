@@ -4,6 +4,7 @@ A local dashboard for Zorua: accounts, 5h/7d usage, providers and directory bind
 It is optional and separate from the Python program; it is not part of the release tarball.
 
 - Data comes from `zorua usage --json` (run by the server, never by the browser). Tokens and provider keys are not in that output. A provider key reaches the page only when you press **show keys** in that provider's editor.
+- The overview starts with a **Needs attention** strip: accounts that are not signed in or report a usage error, limits at 80% or more, Claude accounts with no usage data yet, and failed provider checks; each item opens that account or provider. Rows have **copy command** (`zorua use <name>`; for a binding, `cd <dir> && zorua bind <name>`), because a shell can only be switched from the shell itself.
 - Layout: a sidebar (overview, accounts, providers) and a content area. The overview shows accounts and providers in two columns; a provider or account opens as a page (`#/provider/<name>`, `#/account/<name>`). Dark by default, light follows the system; the **auto / light / dark** switch in the sidebar overrides it.
 - Results are cached for 30 s and refreshed in the background, so the page opens at once. The refresh button forces a reload (at most one per 5 s).
 
@@ -16,6 +17,7 @@ It is optional and separate from the Python program; it is not part of the relea
 | remove an account; optionally delete its data directory | `zorua rm <name> [--purge]` |
 | add or remove a provider (key typed once, stored by zorua in its own `providers.json`) | `zorua provider add / rm` |
 | view and edit a provider: base URL, key and the five model slots up front, the model catalog and all other env variables in collapsible sections. There is no save button: a field is saved when you leave it (a masked key is kept as is; **show keys** reads the real one; **copy** copies it without showing) | `zorua provider get [--reveal]`, `zorua provider put` (keeps `providers.json.bak`) |
+| check a provider (reachable? key accepted? latency); the last result is shown on its row and page, **check all** runs every provider | `zorua provider check <name> --json` (results are kept in the server's memory, not on disk) |
 | bind or unbind a directory | `zorua bind <name>` run inside that directory, `zorua unbind <dir>` |
 
 Safety:

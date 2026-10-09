@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Account, StateResponse } from "@/lib/types";
+import type { Account, Check, StateResponse } from "@/lib/types";
 import { AccountView } from "./account-view";
+import { checkProvider, newest } from "./check";
 import { act, AddAccountForm, AddBindingForm, AddProviderForm, LoginBanner, Modal, RemoveAccountForm } from "./manage";
 import { Overview } from "./overview";
 import { ProviderPage } from "./provider-editor";
@@ -60,6 +61,8 @@ export default function Dashboard() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loginFor, setLoginFor] = useState<string | null>(null);
   const [view, setView] = useState<View>({ kind: "overview" });
+  const [checks, setChecks] = useState<Record<string, Check>>({});
+  const [checking, setChecking] = useState<Set<string>>(new Set());
   const dirty = useRef(false);
   const applied = useRef(HOME);
 
@@ -70,6 +73,7 @@ export default function Dashboard() {
       const body = await r.json();
       if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
       setRes(body as StateResponse);
+      setChecks((cur) => newest(cur, (body as StateResponse).checks ?? {}));
       setErr(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -134,6 +138,31 @@ export default function Dashboard() {
     }
   };
 
+  const check = async (name: string) => {
+    setChecking((cur) => new Set(cur).add(name));
+    try {
+      const c = await checkProvider(name);
+      setChecks((cur) => ({ ...cur, [name]: c }));
+    } catch (e) {
+      setNotice(`check ${name}: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setChecking((cur) => {
+        const next = new Set(cur);
+        next.delete(name);
+        return next;
+      });
+    }
+  };
+  const checkAll = async () => {
+    for (const p of data?.providers ?? []) await check(p.name);
+  };
+  // A saved provider has a new endpoint or key, so its last result no longer applies.
+  const dropCheck = (name: string) =>
+    setChecks((cur) => {
+      const { [name]: _gone, ...rest } = cur;
+      return rest;
+    });
+
   const account = view.kind === "account" ? data?.accounts.find((a) => a.name === view.name) : undefined;
   const provider = view.kind === "provider" ? data?.providers.find((p) => p.name === view.name) : undefined;
   const title = view.kind === "overview" ? "Overview" : view.kind === "account" ? `Account · ${view.name}` : `Provider · ${view.name}`;
@@ -178,8 +207,12 @@ export default function Dashboard() {
           {data && view.kind === "overview" && (
             <Overview
               data={data}
+              checks={checks}
+              checking={checking}
               onOpen={go}
               onLogin={startLogin}
+              onCheck={check}
+              onCheckAll={checkAll}
               onRemoveAccount={(a) => setDialog({ kind: "remove-account", a })}
               onRemoveProvider={(name) => setDialog({ kind: "remove-provider", name })}
               onUnbind={(dir) => setDialog({ kind: "unbind", dir })}
@@ -197,8 +230,14 @@ export default function Dashboard() {
                 key={provider.name}
                 name={provider.name}
                 endpoint={provider.endpoint}
+                check={checks[provider.name]}
+                checking={checking.has(provider.name)}
+                onCheck={() => check(provider.name)}
                 onDirty={setDirty}
-                onSaved={() => load(true)}
+                onSaved={() => {
+                  dropCheck(provider.name);
+                  load(true);
+                }}
                 onRemove={() => setDialog({ kind: "remove-provider", name: provider.name })}
               />
             ) : (

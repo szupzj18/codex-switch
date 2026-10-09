@@ -1,13 +1,16 @@
-import type { Account, Binding, Provider, ZoruaState } from "@/lib/types";
-import { ago, Bar, PLAN_STYLE, usageNote } from "./usage";
+import type { Account, Binding, Check, Provider, ZoruaState } from "@/lib/types";
+import { CheckBadge } from "./check";
+import { CopyButton, shellQuote } from "./copy";
+import { ago, Bar, peak, PLAN_STYLE, usageNote } from "./usage";
 import type { View } from "./view";
 
-function Panel({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
+function Panel({ title, count, action, children }: { title: string; count?: number; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="min-w-0">
-      <h2 className="mb-3 text-sm before:mr-2 before:text-accent before:content-['#']">
+      <h2 className="mb-3 flex items-baseline text-sm before:mr-2 before:text-accent before:content-['#']">
         {title}
         {count != null && <span className="ml-2 text-xs text-dim">{count}</span>}
+        {action && <span className="ml-auto text-[11px] font-normal">{action}</span>}
       </h2>
       <div className="overflow-hidden rounded-[10px] border border-line bg-panel">{children}</div>
     </section>
@@ -15,6 +18,48 @@ function Panel({ title, count, children }: { title: string; count?: number; chil
 }
 
 const linkBtn = "text-dim underline hover:text-accent";
+
+type Item = { key: string; tone: "danger" | "warn" | "info"; text: string; to: View };
+
+/** Everything that needs a look, worst first: sign-ins, nearly used up limits, missing usage, failed checks. */
+function attention(data: ZoruaState, checks: Record<string, Check>): Item[] {
+  const items: Item[] = [];
+  for (const a of data.accounts) {
+    const to: View = { kind: "account", name: a.name };
+    const p = peak(a);
+    if (a.state === "none") items.push({ key: `a:${a.name}`, tone: "warn", text: `${a.name} is not signed in`, to });
+    else if (a.usage.error) items.push({ key: `a:${a.name}`, tone: "warn", text: `${a.name}: ${a.usage.error}`, to });
+    else if (p != null && p >= 80) items.push({ key: `a:${a.name}`, tone: "danger", text: `${a.name} at ${p}% of its limit`, to });
+    else if (a.state === "ok" && a.usage.windows.length === 0 && a.agent === "claude") items.push({ key: `a:${a.name}`, tone: "info", text: `${a.name}: no usage data yet`, to });
+  }
+  for (const p of data.providers) {
+    const c = checks[p.name];
+    if (c && c.status !== "ok") items.push({ key: `p:${p.name}`, tone: c.status === "fail" ? "danger" : "warn", text: `${p.name}: ${c.detail}`, to: { kind: "provider", name: p.name } });
+  }
+  const rank = { danger: 0, warn: 1, info: 2 };
+  return items.sort((x, y) => rank[x.tone] - rank[y.tone]);
+}
+
+const DOT = { danger: "bg-danger", warn: "bg-warn", info: "bg-dim" } as const;
+
+function Attention({ items, onOpen }: { items: Item[]; onOpen: (v: View) => void }) {
+  if (items.length === 0) return <p className="mb-6 text-xs text-dim">✓ nothing needs attention</p>;
+  return (
+    <section aria-label="Needs attention" className="mb-6">
+      <h2 className="mb-2 text-sm before:mr-2 before:text-accent before:content-['#']">Needs attention</h2>
+      <ul className="flex flex-wrap gap-2">
+        {items.map((i) => (
+          <li key={i.key}>
+            <button type="button" onClick={() => onOpen(i.to)} className="flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-1.5 text-left text-xs hover:border-accent">
+              <span className={`size-2 shrink-0 rounded-full ${DOT[i.tone]}`} aria-hidden />
+              {i.text}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () => void; onLogin: () => void; onRemove: () => void }) {
   const ws = a.usage.windows;
@@ -38,6 +83,7 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
           <button type="button" onClick={onLogin} className={linkBtn}>
             sign in
           </button>
+          <CopyButton variant="link" text="copy command" label={`copy: zorua use ${a.name}`} get={async () => `zorua use ${a.name}`} />
           {a.name !== "default" && (
             <button type="button" onClick={onRemove} className="text-dim underline hover:text-danger">
               remove
@@ -62,7 +108,7 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
   );
 }
 
-function ProviderRow({ p, onOpen, onRemove }: { p: Provider; onOpen: () => void; onRemove: () => void }) {
+function ProviderRow({ p, check, checking, onOpen, onCheck, onRemove }: { p: Provider; check?: Check; checking: boolean; onOpen: () => void; onCheck: () => void; onRemove: () => void }) {
   const models = Object.keys(p.models);
   return (
     <li className="grid grid-cols-1 gap-1 border-b border-line px-4 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
@@ -76,13 +122,17 @@ function ProviderRow({ p, onOpen, onRemove }: { p: Provider; onOpen: () => void;
           <button type="button" onClick={onOpen} className={linkBtn}>
             view &amp; edit
           </button>
+          <CopyButton variant="link" text="copy command" label={`copy: zorua use ${p.name}`} get={async () => `zorua use ${p.name}`} />
           <button type="button" onClick={onRemove} className="text-dim underline hover:text-danger">
             remove
           </button>
         </div>
       </div>
-      <div className="text-xs text-dim">
-        {models.length === 0 ? "no model catalog" : `${models.length} model${models.length === 1 ? "" : "s"}: ${models.slice(0, 6).join(", ")}${models.length > 6 ? " …" : ""}`}
+      <div className="min-w-0 text-xs text-dim">
+        <CheckBadge check={check} checking={checking} onCheck={onCheck} />
+        <div className="mt-1">
+          {models.length === 0 ? "no model catalog" : `${models.length} model${models.length === 1 ? "" : "s"}: ${models.slice(0, 4).join(", ")}${models.length > 4 ? " …" : ""}`}
+        </div>
       </div>
     </li>
   );
@@ -95,6 +145,9 @@ function BindingRow({ b, onRemove }: { b: Binding; onRemove: () => void }) {
         {b.dir}
       </span>
       <span className="text-xs text-accent">→ {b.name}</span>
+      <span className="text-[11px]">
+        <CopyButton variant="link" text="copy command" label={`copy: zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
+      </span>
       <button type="button" onClick={onRemove} className="text-[11px] text-dim underline hover:text-danger">
         unbind
       </button>
@@ -106,15 +159,23 @@ const empty = (text: string) => <li className="px-4 py-3 text-xs text-dim">{text
 
 export function Overview({
   data,
+  checks,
+  checking,
   onOpen,
   onLogin,
+  onCheck,
+  onCheckAll,
   onRemoveAccount,
   onRemoveProvider,
   onUnbind,
 }: {
   data: ZoruaState;
+  checks: Record<string, Check>;
+  checking: Set<string>;
   onOpen: (v: View) => void;
   onLogin: (a: Account) => void;
+  onCheck: (name: string) => void;
+  onCheckAll: () => void;
   onRemoveAccount: (a: Account) => void;
   onRemoveProvider: (name: string) => void;
   onUnbind: (dir: string) => void;
@@ -127,27 +188,50 @@ export function Overview({
   const claude = accounts("claude");
   const providers = [...data.providers].sort((x, y) => x.agent.localeCompare(y.agent) || x.name.localeCompare(y.name));
   return (
-    <div className="grid gap-x-6 gap-y-8 xl:grid-cols-2">
-      <Panel title="Codex" count={codex.length}>
-        <ul>{codex.length ? codex : empty("no accounts")}</ul>
-      </Panel>
-      <Panel title="Claude Code" count={claude.length}>
-        <ul>{claude.length ? claude : empty("no accounts")}</ul>
-      </Panel>
-      <Panel title="Providers" count={providers.length}>
-        <ul>
-          {providers.length
-            ? providers.map((p) => <ProviderRow key={`${p.agent}:${p.name}`} p={p} onOpen={() => onOpen({ kind: "provider", name: p.name })} onRemove={() => onRemoveProvider(p.name)} />)
-            : empty("no providers")}
-        </ul>
-      </Panel>
-      <Panel title="Directory bindings" count={data.bindings.length}>
-        <ul>
-          {data.bindings.length
-            ? data.bindings.map((b) => <BindingRow key={`${b.dir}:${b.name}`} b={b} onRemove={() => onUnbind(b.dir)} />)
-            : empty("no bindings — a bound directory switches to its account when you cd into it")}
-        </ul>
-      </Panel>
-    </div>
+    <>
+      <Attention items={attention(data, checks)} onOpen={onOpen} />
+      <div className="grid gap-x-6 gap-y-8 xl:grid-cols-2">
+        <Panel title="Codex" count={codex.length}>
+          <ul>{codex.length ? codex : empty("no accounts")}</ul>
+        </Panel>
+        <Panel title="Claude Code" count={claude.length}>
+          <ul>{claude.length ? claude : empty("no accounts")}</ul>
+        </Panel>
+        <Panel
+          title="Providers"
+          count={providers.length}
+          action={
+            providers.length > 0 && (
+              <button type="button" onClick={onCheckAll} disabled={checking.size > 0} className="text-dim underline hover:text-accent disabled:opacity-50">
+                {checking.size > 0 ? "checking…" : "check all"}
+              </button>
+            )
+          }
+        >
+          <ul>
+            {providers.length
+              ? providers.map((p) => (
+                  <ProviderRow
+                    key={`${p.agent}:${p.name}`}
+                    p={p}
+                    check={checks[p.name]}
+                    checking={checking.has(p.name)}
+                    onOpen={() => onOpen({ kind: "provider", name: p.name })}
+                    onCheck={() => onCheck(p.name)}
+                    onRemove={() => onRemoveProvider(p.name)}
+                  />
+                ))
+              : empty("no providers")}
+          </ul>
+        </Panel>
+        <Panel title="Directory bindings" count={data.bindings.length}>
+          <ul>
+            {data.bindings.length
+              ? data.bindings.map((b) => <BindingRow key={`${b.dir}:${b.name}`} b={b} onRemove={() => onUnbind(b.dir)} />)
+              : empty("no bindings — a bound directory switches to its account when you cd into it")}
+          </ul>
+        </Panel>
+      </div>
+    </>
   );
 }

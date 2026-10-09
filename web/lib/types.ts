@@ -40,10 +40,21 @@ export type LoginJob = {
   startedAt: number;
 };
 
+/** The result of `zorua provider check`: is the endpoint reachable and the key accepted. */
+export type Check = {
+  status: "ok" | "warn" | "fail";
+  http: number | null;
+  ms: number;
+  via: string;
+  detail: string;
+  checked_at: number;
+};
+
 export type StateResponse = {
   data: ZoruaState;
   stale: boolean;
   error: string | null;
+  checks: Record<string, Check>;
 };
 
 /** What `zorua provider get` prints: the editable view of one provider. */

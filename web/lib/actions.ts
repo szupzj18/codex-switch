@@ -1,6 +1,7 @@
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { forget } from "./checks";
 import { cancelLogin, startLogin } from "./jobs";
 import type { LoginJob } from "./types";
 import { invalidate, readRegistry, runCore, ZoruaError } from "./zorua";
@@ -127,12 +128,14 @@ export async function perform(input: unknown): Promise<ActionResult> {
       const input = JSON.stringify(b.doc);
       if (input.length > 200_000) throw new BadRequest("document is too large");
       await run(["provider", "put", n], { input });
+      forget(n);
       return { ok: true, message: `saved provider ${n}` };
     }
     case "provider.remove": {
       const n = name(b.name);
       if (!reg.providers.some((p) => p.name === n)) throw new BadRequest(`unknown provider '${n}'`);
       await run(["provider", "rm", n]);
+      forget(n);
       return { ok: true, message: `removed provider ${n}` };
     }
     case "binding.add": {

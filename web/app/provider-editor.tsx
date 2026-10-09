@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ProviderDoc } from "@/lib/types";
+import type { Check, ProviderDoc } from "@/lib/types";
+import { CheckBadge } from "./check";
+import { CopyButton } from "./copy";
 import { act } from "./manage";
 
 const field =
@@ -65,43 +67,6 @@ function Value({ label, value, onChange, className = "" }: { label: string; valu
       spellCheck={false}
       autoComplete="off"
     />
-  );
-}
-
-/** Copies a value that is fetched on click, so a masked key can be copied without being shown. */
-function CopyButton({ get, label }: { get: () => Promise<string>; label: string }) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-  const click = async () => {
-    try {
-      const text = await get();
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch {
-        const t = document.createElement("textarea"); // clipboard API unavailable: fall back
-        t.value = text;
-        t.style.position = "fixed";
-        t.style.opacity = "0";
-        document.body.appendChild(t);
-        t.select();
-        const ok = document.execCommand("copy");
-        t.remove();
-        if (!ok) throw new Error("copy failed");
-      }
-      setState("copied");
-    } catch {
-      setState("failed");
-    }
-    setTimeout(() => setState("idle"), 1500);
-  };
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={click}
-      className={`w-14 rounded-md border border-line px-2 py-1 text-[11px] ${state === "copied" ? "text-accent" : state === "failed" ? "text-danger" : "text-dim hover:text-fg"}`}
-    >
-      {state === "copied" ? "copied" : state === "failed" ? "failed" : "copy"}
-    </button>
   );
 }
 
@@ -169,12 +134,18 @@ function ModelInput({ label, value, onChange, listId }: { label: string; value: 
 export function ProviderPage({
   name,
   endpoint,
+  check,
+  checking,
+  onCheck,
   onSaved,
   onDirty,
   onRemove,
 }: {
   name: string;
   endpoint: string;
+  check?: Check;
+  checking: boolean;
+  onCheck: () => void;
   onSaved: () => void;
   onDirty: (dirty: boolean) => void;
   onRemove: () => void;
@@ -364,7 +335,9 @@ export function ProviderPage({
             <span className="text-warn">editing — saves when you leave the field</span>
           ) : null}
         </span>
+        <CheckBadge check={check} checking={checking} onCheck={onCheck} />
         <span className="ml-auto flex gap-4 text-xs">
+          <CopyButton variant="link" text="copy command" label={`copy: zorua use ${name}`} get={async () => `zorua use ${name}`} />
           <button type="button" className="text-dim underline hover:text-accent" onClick={toggleReveal}>
             {revealed ? "hide keys" : "show keys"}
           </button>

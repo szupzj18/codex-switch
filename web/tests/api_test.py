@@ -1,5 +1,6 @@
 """API checks for the Zorua web dashboard. Run through tests/run.sh (isolated HOME, fake CLIs)."""
-import json, time, urllib.request, urllib.error, os, sys
+import json, time, urllib.request, urllib.error, os, sys, threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 ROOT = os.environ["ZW_ROOT"]
 B = os.environ["ZW_BASE"]
 H = {"Content-Type": "application/json", "Origin": B, "X-Zorua-Web": "1"}
@@ -13,6 +14,12 @@ def post(body, headers=None, host=None):
 def prov(name, reveal=False, headers=None):
     h = dict(H if headers is None else headers)
     r = urllib.request.Request(B + "/api/provider", data=json.dumps({"name": name, "reveal": reveal}).encode(), headers=h, method="POST")
+    try:
+        with urllib.request.urlopen(r, timeout=60) as f: return f.status, json.load(f)
+    except urllib.error.HTTPError as e: return e.code, json.load(e)
+def run_check(name, headers=None):
+    h = dict(H if headers is None else headers)
+    r = urllib.request.Request(B + "/api/check", data=json.dumps({"name": name}).encode(), headers=h, method="POST")
     try:
         with urllib.request.urlopen(r, timeout=60) as f: return f.status, json.load(f)
     except urllib.error.HTTPError as e: return e.code, json.load(e)
@@ -84,6 +91,33 @@ cd["model"] = "gpt-6.2"; s, r = post({"action":"provider.save","name":"ds2","doc
 check("codex edit saved, key kept", s == 200 and json.load(open(ROOT + "/cfg/providers.json"))["providers"]["ds2"]["model"] == "gpt-6.2" and json.load(open(ROOT + "/cfg/providers.json"))["providers"]["ds2"]["key"] == KEY, r)
 check("provider.remove unknown 400", post({"action":"provider.remove","name":"w1"})[0] == 400)
 s, r = post({"action":"provider.remove","name":"ds2"}); check("remove provider", s == 200, r)
+
+# --- provider check: a stand-in endpoint that accepts one key
+GOOD = "sk-test-GOODKEY-1122334455"
+class Stub(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_GET(self):
+        ok = self.headers.get("Authorization") == "Bearer " + GOOD
+        body = json.dumps({"data": [{"id": "m"}]} if ok else {"error": {"message": "bad key"}}).encode()
+        self.send_response(200 if ok else 401); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+srv = HTTPServer(("127.0.0.1", 0), Stub); threading.Thread(target=srv.serve_forever, daemon=True).start()
+url = "http://127.0.0.1:%d" % srv.server_address[1]
+check("add provider with a good key", post({"action":"provider.add","agent":"claude","name":"chk-good","baseUrl":url,"key":GOOD,"model":"m"})[0] == 200)
+check("add provider with a wrong key", post({"action":"provider.add","agent":"claude","name":"chk-bad","baseUrl":url,"key":"sk-test-WRONG-0000000000","model":"m"})[0] == 200)
+s, r = run_check("chk-good"); c = r.get("check", {})
+check("check: good key is ok", s == 200 and c.get("status") == "ok" and c.get("http") == 200 and c.get("checked_at"), r)
+s, r = run_check("chk-bad"); c = r.get("check", {})
+check("check: wrong key fails, key not echoed", s == 200 and c.get("status") == "fail" and c.get("http") == 401 and "WRONG" not in json.dumps(r) and GOOD not in json.dumps(r), r)
+st = get("/api/state?refresh=1")
+check("state carries the remembered checks", st["checks"].get("chk-good", {}).get("status") == "ok" and st["checks"].get("chk-bad", {}).get("status") == "fail", st.get("checks"))
+check("check needs Origin", run_check("chk-good", headers={"Content-Type": "application/json", "X-Zorua-Web": "1"})[0] == 403)
+check("check needs the custom header", run_check("chk-good", headers={"Content-Type": "application/json", "Origin": B})[0] == 403)
+check("check of an unknown provider is 400", run_check("nobody")[0] == 400)
+s, doc = prov("chk-good"); d = doc["doc"]; d["env"]["ANTHROPIC_BASE_URL"] = url + "/"
+check("saving a provider forgets its check", post({"action":"provider.save","name":"chk-good","doc":d})[0] == 200 and "chk-good" not in get("/api/state?refresh=1")["checks"])
+post({"action":"provider.remove","name":"chk-good"}); post({"action":"provider.remove","name":"chk-bad"})
+check("removed providers drop out of the checks", not {"chk-good", "chk-bad"} & set(get("/api/state?refresh=1")["checks"]))
+srv.shutdown()
 
 # --- bindings
 d = ROOT + "/proj"; os.makedirs(d, exist_ok=True)
