@@ -296,7 +296,7 @@ serves every shell.
 
 ## Web dashboard (optional)
 
-`web/` holds a small local dashboard (Next.js + Tailwind CSS) for accounts, 5h/7d usage, providers and directory bindings, with add/remove/sign-in. It reads `zorua usage --json`, listens on `127.0.0.1:4747` only and runs the matching `zorua` commands for changes. See [web/README.md](web/README.md).
+`web/` holds a small local dashboard (Next.js + Tailwind CSS) for accounts, 5h/7d usage, providers and directory bindings, with add/remove/sign-in and a provider editor (env variables, key, model catalog; copy a key without showing it). Dark by default, light follows the system. It reads `zorua usage --json`, listens on `127.0.0.1:4747` only and runs the matching `zorua` commands for changes. See [web/README.md](web/README.md).
 
 ## Files and configuration
 

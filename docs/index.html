@@ -123,8 +123,9 @@ footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
     <tr><td>zorua use &lt;name&gt; | use -</td><td>fill a slot in this shell | clear everything</td></tr>
     <tr><td>zorua &lt;name&gt; [args]</td><td>one-shot run; stale <code>ANTHROPIC_*</code> variables are cleaned for the run</td></tr>
     <tr><td>zorua bind [name]</td><td>this directory switches automatically on <code>cd</code></td></tr>
-    <tr><td>zorua usage [-v]</td><td>5h / 7d limits per account</td></tr>
+    <tr><td>zorua usage [-v | --json]</td><td>5h / 7d limits per account; <code>--json</code> for other front ends (no tokens, no keys)</td></tr>
     <tr><td>zorua provider add|models|import</td><td>manage endpoints, their models, and import from cc-switch</td></tr>
+    <tr><td>zorua provider get|put</td><td>one provider as JSON (keys masked) and back; keeps <code>providers.json.bak</code></td></tr>
     <tr><td>zorua off providers <span class="pill">main</span></td><td>clear the provider slots, keep the accounts</td></tr>
     <tr><td>zorua off</td><td>clear all four slots</td></tr>
   </table></div>
@@ -146,6 +147,12 @@ footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
 <b> Claude Code</b>
 <span class="d">   NAME  PLAN  5H           7D           RESET</span>
    alt   <span class="p">max</span>   <span class="g">▓▓▓</span><span class="d">░░░</span>  42%  <span class="g">▓</span><span class="d">░░░░░</span>   7%  4d9h</pre></div>
+
+  <h2>web dashboard <span class="pill">optional</span></h2>
+  <div class="term"><div class="bar"><i></i><i></i><i></i><b>web/</b></div>
+<pre><span class="g">$</span> cd web &amp;&amp; npm ci &amp;&amp; npm run build &amp;&amp; npm start
+<span class="d">http://127.0.0.1:4747  (loopback only)</span></pre></div>
+  <p class="note" style="margin-top:10px">A local page for accounts, 5h/7d usage, providers and directory bindings: add, remove and sign in, and edit a provider's env variables, key and model list. Keys stay masked until you press show or copy. Dark by default; light follows the system. It runs the same <code>zorua</code> commands, is not installed by the installer, and is a separate process: Zorua itself still has no daemon.</p>
 
   <footer><p class="fine">The name is a nod to the illusion fox of the Pokémon games, which takes on the appearance of other creatures; here every window shows up as a different account. The icon is an original drawing, not Pokémon artwork, and this is an independent project.</p>Formerly CodeX Switch · MIT · zsh, bash or fish · Python 3.8+ · works with the official Codex CLI and/or Claude Code · <code>zorua usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
 </main>
