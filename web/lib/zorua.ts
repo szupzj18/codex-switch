@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { homedir } from "node:os";
 import path from "node:path";
-import type { ZoruaState } from "./types";
+import type { ProviderDoc, ZoruaState } from "./types";
 
 export const CORE = process.env.ZORUA_CORE ?? path.join(homedir(), ".zorua", "zorua_core.py");
 const TTL_MS = 30_000;
@@ -19,10 +19,10 @@ export class ZoruaError extends Error {}
 /** Run `zorua_core.py <args>`; never through a shell. Secrets go in `env`, not in args. */
 export function runCore(
   args: string[],
-  opts: { env?: Record<string, string>; cwd?: string; timeout?: number } = {},
+  opts: { env?: Record<string, string>; cwd?: string; timeout?: number; input?: string } = {},
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = execFile(
       "python3",
       [CORE, ...args],
       {
@@ -39,6 +39,7 @@ export function runCore(
         resolve(stdout);
       },
     );
+    if (opts.input !== undefined) child.stdin?.end(opts.input);
   });
 }
 
@@ -90,4 +91,14 @@ export async function getState(force: boolean) {
 /** A cheap, uncached read of the registry (no network): used to validate actions. */
 export async function readRegistry(): Promise<ZoruaState> {
   return JSON.parse(await runCore(["ls", "--json"])) as ZoruaState;
+}
+
+/** One provider's editable document; secrets are masked unless `reveal`. */
+export async function readProvider(name: string, reveal: boolean): Promise<ProviderDoc> {
+  const out = await runCore(["provider", "get", name, ...(reveal ? ["--reveal"] : [])], { timeout: 15_000 });
+  try {
+    return JSON.parse(out) as ProviderDoc;
+  } catch {
+    throw new ZoruaError("zorua returned invalid JSON");
+  }
 }

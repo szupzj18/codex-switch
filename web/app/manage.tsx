@@ -16,7 +16,7 @@ export async function act(body: Record<string, unknown>): Promise<{ message: str
 
 const field =
   "w-full rounded-md border border-line bg-bg px-2.5 py-1.5 text-sm text-fg outline-none placeholder:text-dim/60 focus:border-accent";
-const primary = "rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-[#04110e] disabled:opacity-50";
+const primary = "rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-on-accent disabled:opacity-50";
 const ghost = "rounded-md border border-line px-3 py-1.5 text-xs text-dim hover:text-fg";
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -30,7 +30,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
       ref={ref}
       onClose={onClose}
       onClick={(e) => e.target === ref.current && ref.current?.close()}
-      className="m-auto w-[min(92vw,30rem)] rounded-xl border border-line bg-panel p-0 text-fg backdrop:bg-black/70"
+      className="m-auto max-h-[90vh] w-[min(92vw,30rem)] rounded-xl border border-line bg-panel p-0 text-fg backdrop:bg-black/70"
     >
       <div className="p-5">
         <h2 className="mb-4 text-sm before:mr-2 before:text-accent before:content-['#']">{title}</h2>
@@ -107,7 +107,7 @@ export function AddAccountForm({ onDone, onCancel }: { onDone: Done; onCancel: (
         <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="work" required maxLength={32} pattern="[A-Za-z0-9_\-]+" autoFocus />
       </Labeled>
       <label className="mb-4 flex items-center gap-2 text-xs text-dim">
-        <input type="checkbox" checked={login} onChange={(e) => setLogin(e.target.checked)} className="accent-[#5eead4]" />
+        <input type="checkbox" checked={login} onChange={(e) => setLogin(e.target.checked)} className="accent-accent" />
         start the browser sign-in right after adding
       </label>
       <Actions busy={busy} error={error} label="add account" onCancel={onCancel} />
@@ -198,7 +198,7 @@ export function RemoveAccountForm({ name, home, canPurge, onDone, onCancel }: { 
       </p>
       {canPurge ? (
         <label className="mb-3 flex items-start gap-2 text-xs text-dim">
-          <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)} className="mt-0.5 accent-[#fb7185]" />
+          <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)} className="mt-0.5 accent-danger" />
           <span>also delete the data directory (sign-in, history). This cannot be undone.</span>
         </label>
       ) : (
