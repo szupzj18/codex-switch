@@ -18,6 +18,7 @@ import json
 import os
 import re
 import sqlite3
+import time
 import urllib.error
 import urllib.request
 
@@ -155,8 +156,7 @@ def models_url(p):
     return base + "/models"
 
 
-def fetch_models(p, timeout=15):
-    """GET the endpoint's model list (Anthropic and OpenAI style both answer {"data": [{"id": ...}]})."""
+def _auth_headers(p):
     headers = {"User-Agent": "zorua"}
     if agent(p) == "claude":
         var = key_var(p["env"])
@@ -165,7 +165,12 @@ def fetch_models(p, timeout=15):
             p["env"][var] if var == "ANTHROPIC_API_KEY" else "Bearer " + p["env"].get(var, ""))
     else:
         headers["Authorization"] = "Bearer " + p.get("key", "")
-    req = urllib.request.Request(models_url(p), headers=headers)
+    return headers
+
+
+def fetch_models(p, timeout=15):
+    """GET the endpoint's model list (Anthropic and OpenAI style both answer {"data": [{"id": ...}]})."""
+    req = urllib.request.Request(models_url(p), headers=_auth_headers(p))
     try:
         data = json.load(urllib.request.urlopen(req, timeout=timeout))
     except urllib.error.HTTPError as e:
@@ -174,6 +179,85 @@ def fetch_models(p, timeout=15):
         raise RuntimeError("%s: %s" % (models_url(p).split("?")[0], getattr(e, "reason", e)))
     ids = [m.get("id") for m in (data.get("data") or []) if isinstance(m, dict)]
     return [i for i in ids if i]
+
+
+def _messages_url(p):
+    base = p["env"].get("ANTHROPIC_BASE_URL", "").rstrip("/")
+    return base + ("/messages" if base.endswith("/v1") else "/v1/messages")
+
+
+def _test_model(p):
+    """The model a one-token test request should name: the main model, a role, else the first catalog entry."""
+    return (next((p["env"][v] for v in MODEL_VARS.values() if p["env"].get(v)), None)
+            or next(iter(models(p).values()), None))
+
+
+def _reply_message(raw, p):
+    """A short, secret-free sentence out of an error response body."""
+    try:
+        d = json.loads(raw)
+        m = (d.get("error") or {}).get("message") if isinstance(d.get("error"), dict) else d.get("error") or d.get("message")
+        raw = m if isinstance(m, str) else raw
+    except (ValueError, AttributeError):
+        pass
+    text = " ".join(str(raw).split())[:120]
+    key = secret(p)
+    return text.replace(key, "***") if key else text
+
+
+def _send(req, timeout):
+    """-> (http status or None, body text, milliseconds). Never raises."""
+    t0 = time.monotonic()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read(2000).decode("utf-8", "replace"), int((time.monotonic() - t0) * 1000)
+    except urllib.error.HTTPError as e:
+        return e.code, e.read(2000).decode("utf-8", "replace"), int((time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return None, str(getattr(e, "reason", e)), int((time.monotonic() - t0) * 1000)
+
+
+def _verdict(code, body, p):
+    """-> (status, detail) for an answer that is not a plain success"""
+    if code in (401, 403):
+        return "fail", "key rejected (HTTP %d)" % code
+    if code == 429:
+        return "warn", "rate limited (HTTP 429): reachable, key accepted"
+    if code is not None and code >= 500:
+        return "fail", "server error (HTTP %d)" % code
+    return "warn", "reachable, but answered HTTP %d: %s" % (code, _reply_message(body, p))
+
+
+def check(p, timeout=15):
+    """Is this provider's endpoint reachable and its key accepted?
+    -> {"status": "ok"|"warn"|"fail", "http": int|None, "ms": int, "via": str, "detail": str}
+    GET the model list first (free). A Claude endpoint without one gets a one-token message request
+    instead, which uses a negligible amount of the provider's quota. Never contains the key."""
+    url = models_url(p).split("?")[0]
+    code, body, ms = _send(urllib.request.Request(models_url(p), headers=_auth_headers(p)), timeout)
+    via = "GET " + url
+    if code is None:
+        return {"status": "fail", "http": None, "ms": ms, "via": via, "detail": "unreachable: " + _reply_message(body, p)}
+    if 200 <= code < 300:
+        return {"status": "ok", "http": code, "ms": ms, "via": via, "detail": "key accepted"}
+    if code in (404, 405) and agent(p) == "claude":
+        model = _test_model(p)
+        if not model:
+            return {"status": "warn", "http": code, "ms": ms, "via": via,
+                    "detail": "reachable; no model list and no model to test with"}
+        headers = dict(_auth_headers(p), **{"content-type": "application/json"})
+        payload = json.dumps({"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "hi"}]})
+        url = _messages_url(p)
+        code, body, ms = _send(urllib.request.Request(url, data=payload.encode(), headers=headers, method="POST"), timeout)
+        via = "POST " + url
+        if code is None:
+            return {"status": "fail", "http": None, "ms": ms, "via": via, "detail": "unreachable: " + _reply_message(body, p)}
+        if 200 <= code < 300:
+            return {"status": "ok", "http": code, "ms": ms, "via": via, "detail": "key accepted"}
+    elif code in (404, 405):
+        return {"status": "warn", "http": code, "ms": ms, "via": via, "detail": "reachable; no /models endpoint, key not verified"}
+    status, detail = _verdict(code, body, p)
+    return {"status": status, "http": code, "ms": ms, "via": via, "detail": detail}
 
 
 def is_secret(var):
