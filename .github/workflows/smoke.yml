@@ -24,7 +24,7 @@ jobs:
 
       - name: Syntax check
         run: |
-          python3 -c "import ast,sys; ast.parse(open('zorua_core.py').read())"
+          python3 -c "import ast,sys; [ast.parse(open(f).read()) for f in ('zorua_core.py', 'zorua_providers.py')]"
           zsh -n zorua.zsh
           sh -n install.sh
           sh -n uninstall.sh

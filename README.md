@@ -169,6 +169,37 @@ A manual `zorua use` inside a bound directory wins until you leave it. Bindings 
 longest directory prefix, so nested projects can differ from their parent, and a
 directory can bind one Codex and one Claude Code account at once.
 
+## Providers (third-party Claude Code endpoints)
+
+A provider is a base URL, an API key and an optional model mapping, for a service that
+speaks the Anthropic API (GLM, Kimi, DeepSeek, a company relay, …). Providers are picked
+per terminal, exactly like accounts, and never touch `~/.claude/settings.json`.
+
+```zsh
+zorua provider add glm --base-url https://open.bigmodel.cn/api/anthropic \
+    --model sonnet=glm-4.6 --model haiku=glm-4.5-air     # key is prompted (hidden)
+zorua use glm              # plain `claude` in this terminal now runs on glm
+zorua kimi                 # one-shot: run claude on provider kimi
+zorua bind glm             # this directory switches to glm automatically
+zorua provider import cc-switch --dry-run     # preview copying providers out of cc-switch
+```
+
+How it works: while a provider is active, Zorua's `claude` shell function starts
+`claude --settings <file>`. The file (mode 0600, under `~/.config/zorua/run/`) holds the
+provider's environment, so the key never appears in `ps`. A plain `ANTHROPIC_BASE_URL` in the
+shell would lose to the `env` block of `settings.json`; `--settings` outranks it. Variables
+that `settings.json` sets and the provider does not (`ANTHROPIC_*`, `CLAUDE_CODE_SUBAGENT_MODEL`, …)
+are blanked, so a relay's model names do not leak into another provider.
+
+- `--api-key` sends the key as `ANTHROPIC_API_KEY` (default: `ANTHROPIC_AUTH_TOKEN`);
+  `--key-env VAR` reads it from a variable; `--model ROLE=ID` with ROLE in `default`, `opus`,
+  `sonnet`, `haiku`, `subagent`; `--env VAR=VALUE` adds any other variable.
+- Only the `claude` you type in that shell is affected. Scripts and tools that launch `claude`
+  themselves do not go through the function; use `zorua <provider> …` for those.
+- `provider import cc-switch` reads cc-switch's database read-only and copies the custom Claude
+  providers that carry their own key. Entries that point at cc-switch's local proxy are skipped.
+- Not included: a local proxy, failover and per-request cost tracking.
+
 ## Commands
 
 | Command | What it does |
@@ -185,6 +216,8 @@ directory can bind one Codex and one Claude Code account at once.
 | `zorua use <name>` / `zorua use -` / `zorua off` | Switch this shell to an account / back to defaults |
 | `zorua <name> [args…]` | One-shot: run `codex` or `claude` under that account |
 | `zorua bind [name]` / `unbind [dir]` / `binds` | Manage directory bindings |
+| `zorua provider add\|ls\|show\|rm\|import` | Manage third-party Claude Code providers (see above) |
+| `zorua use <provider>` / `zorua <provider> [args…]` | Switch this shell to a provider / one-shot run |
 | `zorua rm <name> [--purge]` | Unregister an account (data kept unless `--purge` or confirmed) |
 | `zorua hook install\|remove\|status\|refresh` | Claude usage relay (see above) |
 | `zorua prompt` | Print the prompt marker |
@@ -212,10 +245,11 @@ serves every shell.
 ## Files and configuration
 
 ```text
-~/.zorua/                              the program: zorua_core.py, zorua_statusline.py, zorua.{zsh,bash,fish}
+~/.zorua/                              the program: zorua_core.py, zorua_providers.py, zorua_statusline.py, zorua.{zsh,bash,fish}
 ~/.config/zorua/accounts.tsv           Codex accounts       <name>\t<CODEX_HOME>
 ~/.config/zorua/claude-accounts.tsv    Claude Code accounts <name>\t<CLAUDE_CONFIG_DIR>
 ~/.config/zorua/bindings.tsv           directory bindings   <name>\t<path>
+~/.config/zorua/providers.json         providers incl. API keys (mode 0600); run/<name>.settings.json is generated
 ~/.codex  ~/.codex-<name>/             Codex homes     (untouched)
 ~/.claude-<name>/                      Claude Code config directories
 ```

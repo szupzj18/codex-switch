@@ -6,7 +6,7 @@
 #   PS1='$ZORUA_PROMPT_TEXT \u@\h:\w\$ '
 
 ZORUA_CORE="${ZORUA_CORE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/zorua_core.py}"
-ZORUA_AUTO_ACTIVE="" _ZORUA_PRE_AUTO_HOME="" ZORUA_AUTO_CLAUDE="" _ZORUA_PRE_AUTO_CLAUDE="" ZORUA_PROMPT_KIND="" ZORUA_PROMPT_NAME="" ZORUA_PROMPT_TEXT=""
+ZORUA_AUTO_ACTIVE="" _ZORUA_PRE_AUTO_HOME="" ZORUA_AUTO_CLAUDE="" _ZORUA_PRE_AUTO_CLAUDE="" ZORUA_AUTO_PROVIDER="" _ZORUA_PRE_AUTO_PROVIDER="" ZORUA_PROMPT_KIND="" ZORUA_PROMPT_NAME="" ZORUA_PROMPT_TEXT=""
 _ZORUA_BINDINGS="${ZORUA_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zorua}/bindings.tsv"
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -19,6 +19,7 @@ _zorua_run() {
   f=$(mktemp "${TMPDIR:-/tmp}/zorua.XXXXXX") || return 1
   ZORUA_SHELL=bash ZORUA_EVAL_FILE=$f ZORUA_AUTO_ACTIVE=$ZORUA_AUTO_ACTIVE ZORUA_PRE_AUTO_HOME=$_ZORUA_PRE_AUTO_HOME \
     ZORUA_AUTO_CLAUDE=$ZORUA_AUTO_CLAUDE ZORUA_PRE_AUTO_CLAUDE=$_ZORUA_PRE_AUTO_CLAUDE \
+    ZORUA_AUTO_PROVIDER=$ZORUA_AUTO_PROVIDER ZORUA_PRE_AUTO_PROVIDER=$_ZORUA_PRE_AUTO_PROVIDER \
     python3 "$ZORUA_CORE" "$@"
   rc=$?
   if [ -s "$f" ]; then . "$f"; fi
@@ -28,11 +29,20 @@ _zorua_run() {
 
 zorua() { _zorua_run "$@"; }
 
+# While a provider is active (zorua use <provider>), plain `claude` runs on it.
+claude() {
+  if [ -n "${ZORUA_PROVIDER:-}" ]; then
+    ZORUA_SHELL=bash python3 "$ZORUA_CORE" launch claude "$@"
+  else
+    command claude "$@"
+  fi
+}
+
 # bash has no chpwd hook: check $PWD from PROMPT_COMMAND instead.
 _zorua_prompt_hook() {
   if [ "$PWD" != "${_ZORUA_LAST_PWD:-}" ]; then
     _ZORUA_LAST_PWD=$PWD
-    if [ -s "$_ZORUA_BINDINGS" ] || [ -n "$ZORUA_AUTO_ACTIVE" ] || [ -n "$ZORUA_AUTO_CLAUDE" ]; then
+    if [ -s "$_ZORUA_BINDINGS" ] || [ -n "$ZORUA_AUTO_ACTIVE" ] || [ -n "$ZORUA_AUTO_CLAUDE" ] || [ -n "$ZORUA_AUTO_PROVIDER" ]; then
       _zorua_run apply "$PWD"
     fi
   fi
@@ -59,7 +69,7 @@ _zorua_complete() {
   local cur=${COMP_WORDS[COMP_CWORD]} names
   names=$(ZORUA_SHELL=bash python3 "$ZORUA_CORE" names 2>/dev/null)
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "ls usage setup use login off add rm bind unbind binds hook prompt version help $names" -- "$cur"))
+    COMPREPLY=($(compgen -W "ls usage setup use login off add rm bind unbind binds hook provider prompt version help $names" -- "$cur"))
   else
     case ${COMP_WORDS[1]} in
       use|login|bind|rm) COMPREPLY=($(compgen -W "$names" -- "$cur")) ;;

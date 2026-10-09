@@ -209,7 +209,7 @@ zorua rm u2 --purge >/dev/null
 
 # portable + self-healing relay command, legacy format, remove --all
 INST="$HOME/.zoruainst"; mkdir -p "$INST"
-cp "$ROOT/zorua_core.py" "$ROOT/zorua_statusline.py" "$INST/"
+cp "$ROOT/zorua_core.py" "$ROOT/zorua_providers.py" "$ROOT/zorua_statusline.py" "$INST/"
 zorua add --claude u3 >/dev/null
 U3="$HOME/.claude-u3"
 printf '{"statusLine":{"type":"command","command":"cat >/dev/null; echo orig-line"}}' > "$U3/settings.json"
@@ -233,7 +233,7 @@ rm -rf "$INST"
 
 # uninstall.sh: note without --purge, restore with --purge
 INST="$HOME/.zorua"; mkdir -p "$INST"
-cp "$ROOT/zorua_core.py" "$ROOT/zorua_statusline.py" "$INST/"
+cp "$ROOT/zorua_core.py" "$ROOT/zorua_providers.py" "$ROOT/zorua_statusline.py" "$INST/"
 zorua add --claude u4 >/dev/null
 U4="$HOME/.claude-u4"
 printf '{"statusLine":{"type":"command","command":"echo keep-me"}}' > "$U4/settings.json"
@@ -283,5 +283,84 @@ contains "$out" "Zorua setup" "setup banner"
 contains "$(cat "$XDG_CONFIG_HOME/zorua/accounts.tsv")" "adopt" "setup registers"
 zorua setup </dev/null >/dev/null 2>&1 || die "setup must survive EOF"
 ok "setup wizard"
+
+# ---- providers ----------------------------------------------------------------
+
+fails() { if "$@" >/dev/null 2>&1; then die "expected failure: $*"; fi; }
+mkdir -p "$HOME/.claude"
+echo '{"env":{"ANTHROPIC_BASE_URL":"http://127.0.0.1:1","ANTHROPIC_AUTH_TOKEN":"PROXY_MANAGED","ANTHROPIC_DEFAULT_SONNET_MODEL":"internal"}}' > "$HOME/.claude/settings.json"
+out=$(zorua provider add glm --base-url https://api.example.com/anthropic/ --key sk-glm-secret-123456 --model sonnet=glm-4.6)
+contains "$out" "added provider: glm" "provider add"
+echo sk-kimi-secret-123456 | zorua provider add kimi --base-url https://kimi.example.com --api-key --model default=k3 >/dev/null
+fails zorua provider add glm --base-url https://x.example.com --key k
+fails zorua provider add ls --base-url https://x.example.com --key k
+fails zorua provider add bad --base-url ftp://x.example.com --key k
+fails zorua provider add bad --base-url https://x.example.com --key k --model nope=x
+[ "$(stat -f %Lp "$XDG_CONFIG_HOME/zorua/providers.json" 2>/dev/null || stat -c %a "$XDG_CONFIG_HOME/zorua/providers.json")" = 600 ] || die "providers.json must be 0600"
+out="$(zorua provider ls)$(zorua provider show glm)$(zorua)"
+not_contains "$out" "sk-glm-secret-123456" "keys are masked in ls/show/list"
+contains "$out" "api.example.com" "provider endpoint shown"
+zorua use glm >/dev/null
+[ "$ZORUA_PROVIDER" = glm ] || die "use glm did not set ZORUA_PROVIDER"
+[ "$ZORUA_PROMPT_TEXT" = "[provider:glm]" ] || die "provider marker: $ZORUA_PROMPT_TEXT"
+out=$(PATH="$TMP/cbin:$PATH" claude hi)
+contains "$out" "TOKEN=sk-glm-secret-123456" "provider key reaches claude"
+contains "$out" "BASE=https://api.example.com/anthropic" "provider base url reaches claude"
+contains "$out" "ARGS=--settings" "claude is launched with --settings"
+contains "$out" "SETTINGS_PERMS=600" "settings file is private"
+contains "$out" '"ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.6"' "provider model beats settings.json"
+zorua use kimi >/dev/null
+out=$(PATH="$TMP/cbin:$PATH" claude hi)
+contains "$out" '"ANTHROPIC_API_KEY": "sk-kimi-secret-123456"' "api-key style provider"
+contains "$out" '"ANTHROPIC_AUTH_TOKEN": ""' "conflicting token from settings.json is blanked"
+contains "$out" '"ANTHROPIC_DEFAULT_SONNET_MODEL": ""' "conflicting model from settings.json is blanked"
+out=$(PATH="$TMP/cbin:$PATH" zorua glm oneshot)
+contains "$out" "ARGS=--settings" "one-shot provider launch"
+contains "$out" "oneshot" "one-shot passes arguments"
+zorua use - >/dev/null
+[ -z "${ZORUA_PROVIDER:-}" ] || die "use - did not clear ZORUA_PROVIDER"
+out=$(PATH="$TMP/cbin:$PATH" claude plain)
+not_contains "$out" "--settings" "claude is untouched without a provider"
+mkdir -p "$TMP/pproj"; cd "$TMP/pproj"
+zorua bind glm >/dev/null
+[ "$ZORUA_PROVIDER" = glm ] && [ "$ZORUA_AUTO_PROVIDER" = glm ] || die "provider bind did not apply"
+cd "$TMP"; zorua apply "$PWD"
+[ -z "${ZORUA_PROVIDER:-}" ] || die "leaving the bound directory did not restore"
+zorua apply "$TMP/pproj"
+[ "$ZORUA_PROVIDER" = glm ] || die "re-entering the bound directory did not switch"
+zorua unbind "$TMP/pproj" >/dev/null
+zorua use glm >/dev/null
+fails zorua provider rm glm
+zorua use - >/dev/null
+zorua provider rm glm >/dev/null
+contains "$(zorua provider ls)" "kimi" "other providers survive rm"
+not_contains "$(zorua provider ls)" "glm " "provider rm"
+ok "providers: add, use, claude launch, bind, rm"
+
+python3 - "$TMP/ccswitch.db" <<'PY'
+import json, sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute("CREATE TABLE providers (id TEXT, app_type TEXT, name TEXT, settings_config TEXT, sort_index INTEGER)")
+rows = [
+  ("a", "claude", "Super Relay", {"env": {"ANTHROPIC_BASE_URL": "https://relay.example.com", "ANTHROPIC_AUTH_TOKEN": "tok-relay-123456789", "ANTHROPIC_MODEL": "m1"}}),
+  ("b", "claude", "Claude Official", {"env": {}}),
+  ("c", "claude", "Proxied", {"env": {"ANTHROPIC_BASE_URL": "http://127.0.0.1:15721", "ANTHROPIC_AUTH_TOKEN": "PROXY_MANAGED"}}),
+  ("d", "pi", "pi-only", {"env": {"ANTHROPIC_BASE_URL": "https://pi.example.com", "ANTHROPIC_AUTH_TOKEN": "tok-pi-123456789"}}),
+]
+for i, (id_, app, name, cfg) in enumerate(rows):
+    con.execute("INSERT INTO providers VALUES (?,?,?,?,?)", (id_, app, name, json.dumps(cfg), i))
+con.commit()
+PY
+out=$(zorua provider import cc-switch --db "$TMP/ccswitch.db" --dry-run)
+contains "$out" "super-relay" "import lists the custom claude provider"
+not_contains "$out" "Proxied" "proxy-managed entries skipped"
+not_contains "$out" "pi-only" "other apps skipped"
+not_contains "$out" "tok-relay-123456789" "import never prints keys"
+! zorua provider ls | grep -q super-relay || die "dry run must not write"
+zorua provider import cc-switch --db "$TMP/ccswitch.db" >/dev/null
+contains "$(zorua provider show super-relay)" "ANTHROPIC_MODEL=m1" "imported env is kept"
+out=$(zorua provider import cc-switch --db "$TMP/ccswitch.db")
+contains "$out" "already exists" "import skips existing names"
+ok "providers: import from cc-switch"
 
 echo "All $n bash smoke checks passed."

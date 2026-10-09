@@ -19,7 +19,7 @@ REPO_OWNER="szupzj18"
 REPO_NAME="zorua"
 BRANCH="${ZORUA_REF:-main}"      # branch, tag (e.g. v0.5.0) or commit to install from
 INSTALL_DIR="${ZORUA_HOME:-${CX_HOME:-$HOME/.zorua}}"
-FILES="zorua_core.py zorua_statusline.py zorua.zsh zorua.bash zorua.fish"
+FILES="zorua_core.py zorua_providers.py zorua_statusline.py zorua.zsh zorua.bash zorua.fish"
 MARK_BEGIN="# >>> zorua >>>"
 MARK_END="# <<< zorua <<<"
 # Zorua used to be called codex-switch; clean up what the old installer left behind.

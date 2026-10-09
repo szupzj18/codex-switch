@@ -12,5 +12,11 @@ case "$1 $2" in
   *) echo "FAKE_CLAUDE_DIR=$CLAUDE_CONFIG_DIR"
      echo "TOKEN=${ANTHROPIC_AUTH_TOKEN:-unset}"
      echo "BASE=${ANTHROPIC_BASE_URL:-unset}"
-     echo "ARGS=$*" ;;
+     echo "ARGS=$*"
+     # show what a --settings file hands to claude (the real CLI merges it over settings.json)
+     prev=""
+     for a in "$@"; do
+       [ "$prev" = "--settings" ] && [ -f "$a" ] && { echo "SETTINGS_PERMS=$(stat -f %Lp "$a" 2>/dev/null || stat -c %a "$a")"; sed 's/^/SETTINGS: /' "$a"; }
+       prev=$a
+     done ;;
 esac
