@@ -178,12 +178,12 @@ export default function Dashboard() {
       <Sidebar data={data} view={view} items={items} onGo={go} />
 
       <main className="min-w-0">
-        <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <div className="min-w-0 flex-1">
             <div className="text-xs text-accent">$ zorua usage{data ? ` · ${data.version}` : ""}</div>
             <h1 className="truncate text-2xl font-bold leading-tight">{title}</h1>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2.5">
             {([["account", "+ account"], ["provider", "+ provider"], ["binding", "+ binding"]] as const).map(([k, label]) => (
               <button key={k} type="button" onClick={() => setDialog({ kind: k })} className="rounded-md border border-accent px-3 py-1.5 text-xs text-accent hover:bg-accent/10">
                 {label}

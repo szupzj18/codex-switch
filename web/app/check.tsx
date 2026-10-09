@@ -1,4 +1,5 @@
 import type { Check } from "@/lib/types";
+import { actionBtn } from "./ui";
 import { ago } from "./usage";
 
 export async function checkProvider(name: string): Promise<Check> {
@@ -25,7 +26,7 @@ const MARK = { ok: "✓", warn: "!", fail: "✗" } as const;
 /** The result of the last provider check, or "not checked", with a check link. */
 export function CheckBadge({ check, checking, onCheck }: { check?: Check; checking: boolean; onCheck: () => void }) {
   return (
-    <span className="text-[11px]">
+    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
       {checking ? (
         <span className="text-dim">checking…</span>
       ) : check ? (
@@ -36,8 +37,8 @@ export function CheckBadge({ check, checking, onCheck }: { check?: Check; checki
         </span>
       ) : (
         <span className="text-dim">not checked</span>
-      )}{" "}
-      <button type="button" onClick={onCheck} disabled={checking} className="text-dim underline hover:text-accent disabled:opacity-50">
+      )}
+      <button type="button" onClick={onCheck} disabled={checking} className={actionBtn}>
         {check ? "check again" : "check"}
       </button>
     </span>
