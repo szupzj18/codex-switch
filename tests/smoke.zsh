@@ -207,7 +207,7 @@ fails zorua provider add glm --base-url https://x.example.com --key k
 fails zorua provider add ls --base-url https://x.example.com --key k
 fails zorua provider add bad --base-url ftp://x.example.com --key k
 fails zorua provider add bad --base-url https://x.example.com --key k --model nope=x
-[[ $(stat -f %Lp "$XDG_CONFIG_HOME/zorua/providers.json" 2>/dev/null || stat -c %a "$XDG_CONFIG_HOME/zorua/providers.json") == 600 ]] || die "providers.json must be 0600"
+[[ $(stat -c %a "$XDG_CONFIG_HOME/zorua/providers.json" 2>/dev/null || stat -f %Lp "$XDG_CONFIG_HOME/zorua/providers.json") == 600 ]] || die "providers.json must be 0600"
 out="$(zorua provider ls)$(zorua provider show glm)$(zorua)"
 not_contains "$out" "sk-glm-secret-123456" "keys are masked in ls/show/list"
 contains "$out" "api.example.com" "provider endpoint shown"
