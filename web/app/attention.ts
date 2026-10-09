@@ -15,6 +15,7 @@ export function attention(data: ZoruaState, checks: Record<string, Check>): Item
     if (a.state === "none") items.push({ key: `a:${a.name}`, tone: "warn", text: `${a.name} is not signed in`, to });
     else if (a.usage.error) items.push({ key: `a:${a.name}`, tone: "warn", text: `${a.name}: ${a.usage.error}`, to });
     else if (p != null && p >= 80) items.push({ key: `a:${a.name}`, tone: "danger", text: `${a.name} at ${p}% of its limit`, to });
+    else if (a.usage.shadowed_by?.length) items.push({ key: `a:${a.name}`, tone: "warn", text: `${a.name}: relay hidden by ${a.usage.shadowed_by[0].file}`, to });
     else if (a.state === "ok" && a.usage.windows.length === 0 && a.agent === "claude") items.push({ key: `a:${a.name}`, tone: "info", text: `${a.name}: no usage data yet`, to });
   }
   for (const p of data.providers) {
