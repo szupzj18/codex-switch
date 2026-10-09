@@ -257,7 +257,7 @@ are blanked, so a relay's model names do not leak into another provider.
 | `zorua usage -v` / `zorua ls -v` | Detailed blocks per account (home, bars, credits) |
 | `zorua setup` | Interactive first-run wizard |
 | `zorua add <name>` | Create a Codex account (new `CODEX_HOME`, sign-in) |
-| `zorua add --claude <name>` | Create a Claude Code account (new `CLAUDE_CONFIG_DIR`, sign-in) |
+| `zorua add --claude <name>` | Create a Claude Code account (new `CLAUDE_CONFIG_DIR`, sign-in; seeded from `claude-settings.json` if present) |
 | `zorua add … --home DIR` | Register an existing directory instead |
 | `zorua add … --no-login` / `--device-auth` | Skip sign-in / headless sign-in (Codex) |
 | `zorua login <name>` | (Re)run the sign-in of one account |
@@ -298,6 +298,7 @@ serves every shell.
 ~/.zorua/                              the program: zorua_core.py, zorua_providers.py, zorua_statusline.py, zorua.{zsh,bash,fish}
 ~/.config/zorua/accounts.tsv           Codex accounts       <name>\t<CODEX_HOME>
 ~/.config/zorua/claude-accounts.tsv    Claude Code accounts <name>\t<CLAUDE_CONFIG_DIR>
+~/.config/zorua/claude-settings.json   optional template copied to a new Claude account's settings.json (e.g. proxy env); never overwrites
 ~/.config/zorua/bindings.tsv           directory bindings   <name>\t<path>
 ~/.config/zorua/providers.json         Claude Code and Codex providers incl. API keys (mode 0600); run/<name>.settings.json is generated
 ~/.codex  ~/.codex-<name>/             Codex homes     (untouched)

@@ -115,6 +115,21 @@ if zorua add --claude work 2>/dev/null; then die "name clash across kinds must f
 if zorua add --claude x --device-auth 2>/dev/null; then die "--device-auth is codex-only"; fi
 ok "add --claude + ls (shared namespace)"
 
+# claude-settings.json template seeds new Claude accounts and never overwrites
+TPL="$XDG_CONFIG_HOME/zorua/claude-settings.json"
+printf '{"env":{"HTTPS_PROXY":"http://127.0.0.1:1"}}\n' > "$TPL"
+zorua add --claude seeded >/dev/null
+cmp -s "$TPL" "$HOME/.claude-seeded/settings.json" || die "template not copied into new claude account"
+[ "$(stat -c %a "$HOME/.claude-seeded/settings.json" 2>/dev/null || stat -f %Lp "$HOME/.claude-seeded/settings.json")" = 600 ] || die "seeded settings.json must be 0600"
+mkdir -p "$HOME/.claude-kept" && printf '{"keep":1}\n' > "$HOME/.claude-kept/settings.json"
+zorua add --claude kept >/dev/null
+[ "$(cat "$HOME/.claude-kept/settings.json")" = '{"keep":1}' ] || die "existing settings.json must not be overwritten"
+rm -f "$TPL"
+zorua add --claude plain >/dev/null
+[ ! -e "$HOME/.claude-plain/settings.json" ] || die "no template: no settings.json must be created"
+zorua rm seeded --purge >/dev/null; zorua rm kept --purge >/dev/null; zorua rm plain --purge >/dev/null
+ok "add --claude seeds settings.json from claude-settings.json template"
+
 ALT="$HOME/.claude-alt"
 warn=$(ANTHROPIC_AUTH_TOKEN=secret zorua use alt 2>&1 >/dev/null) || true
 contains "$warn" "ANTHROPIC_AUTH_TOKEN" "override warning"

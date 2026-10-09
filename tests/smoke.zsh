@@ -200,6 +200,20 @@ zorua use - >/dev/null
 zorua rm alt --purge >/dev/null
 ok "claude accounts work through the zsh wrapper"
 
+# claude-settings.json template seeds new Claude accounts and never overwrites
+TPL="$XDG_CONFIG_HOME/zorua/claude-settings.json"
+print -r -- '{"env":{"HTTPS_PROXY":"http://127.0.0.1:1"}}' > $TPL
+PATH="$TMP/cbin:$PATH" zorua add --claude seeded >/dev/null
+cmp -s $TPL $HOME/.claude-seeded/settings.json || die "template not copied into new claude account"
+mkdir -p $HOME/.claude-kept && print -r -- '{"keep":1}' > $HOME/.claude-kept/settings.json
+PATH="$TMP/cbin:$PATH" zorua add --claude kept >/dev/null
+[[ "$(<$HOME/.claude-kept/settings.json)" == '{"keep":1}' ]] || die "existing settings.json must not be overwritten"
+rm -f $TPL
+PATH="$TMP/cbin:$PATH" zorua add --claude plain >/dev/null
+[[ ! -e $HOME/.claude-plain/settings.json ]] || die "no template: no settings.json must be created"
+zorua rm seeded --purge >/dev/null; zorua rm kept --purge >/dev/null; zorua rm plain --purge >/dev/null
+ok "add --claude seeds settings.json from claude-settings.json template"
+
 # ---- 12. providers ---------------------------------------------------------------
 
 mkdir -p "$HOME/.claude"
