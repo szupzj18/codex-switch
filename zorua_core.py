@@ -409,8 +409,10 @@ def emit_json(all_acc, info, live, claude_age):
                          "email": i["email"], "plan": i["plan"], "until": i["until"], "usage": u})
     providers = [{"name": n, "agent": zp.agent(p), "endpoint": zp.endpoint(p), "models": zp.models(p)}
                  for n, p in zp.load(CONFIG_DIR).items()]
+    bindings = [{"name": n, "dir": d, "kind": kind_of(n)} for n, d in read_tsv(BINDING_FILE)]
     print(json.dumps({"version": VERSION, "generated_at": int(time.time()),
-                      "accounts": accounts, "providers": providers}, ensure_ascii=False, indent=2))
+                      "accounts": accounts, "providers": providers, "bindings": bindings},
+                     ensure_ascii=False, indent=2))
 
 
 def render(online, verbose, expiry=False, as_json=False):
