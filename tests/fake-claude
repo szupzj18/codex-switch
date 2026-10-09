@@ -16,7 +16,7 @@ case "$1 $2" in
      # show what a --settings file hands to claude (the real CLI merges it over settings.json)
      prev=""
      for a in "$@"; do
-       [ "$prev" = "--settings" ] && [ -f "$a" ] && { echo "SETTINGS_PERMS=$(stat -f %Lp "$a" 2>/dev/null || stat -c %a "$a")"; sed 's/^/SETTINGS: /' "$a"; }
+       [ "$prev" = "--settings" ] && [ -f "$a" ] && { echo "SETTINGS_PERMS=$(stat -c %a "$a" 2>/dev/null || stat -f %Lp "$a")"; sed 's/^/SETTINGS: /' "$a"; }
        prev=$a
      done ;;
 esac
