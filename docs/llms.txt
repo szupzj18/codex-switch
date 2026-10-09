@@ -16,6 +16,7 @@ Full docs: https://github.com/szupzj18/zorua/blob/main/README.md
 - It manages the Codex CLI and Claude Code (subscription logins). The Codex desktop app and the VS Code extension do not read CODEX_HOME.
 - Claude Code accounts use Claude Code's own multi-account mechanism: one CLAUDE_CONFIG_DIR per account (settings, history and the login are per directory; on macOS the Keychain entry name is derived from the directory path).
 - It never modifies anything inside an account's home directory.
+- The state of one terminal is four environment variables, one slot each: `CODEX_HOME` (Codex account), `CLAUDE_CONFIG_DIR` (Claude Code account), `ZORUA_CODEX_PROVIDER` and `ZORUA_CLAUDE_PROVIDER` (third-party providers). `zorua use` fills one slot and leaves the others alone; `zorua off providers` clears the two provider slots; `zorua off` clears all four.
 
 ## Requirements
 
@@ -109,6 +110,7 @@ Providers are listed after the accounts, one table per agent (for example "Provi
 
     ~/.config/zorua/accounts.tsv   registered accounts: <name>\t<codex home>
     ~/.config/zorua/claude-accounts.tsv  Claude Code accounts: <name>\t<config dir>
+    ~/.config/zorua/claude-settings.json  optional template copied to a new Claude account's settings.json (for example proxy env); never overwrites an existing file
     ~/.config/zorua/bindings.tsv   directory bindings:  <name>\t<absolute path>  (longest-prefix match, per tool; accounts and providers)
     ~/.config/zorua/providers.json Claude Code and Codex providers incl. API keys (mode 0600)
     ~/.config/zorua/run/<name>.settings.json   generated per launch for Claude providers (mode 0600)
