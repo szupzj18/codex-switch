@@ -44,7 +44,7 @@ export function CopyButton({ get, label, text = "copy", variant = "box" }: { get
       aria-label={label}
       title={label}
       onClick={click}
-      className={variant === "box" ? `w-14 rounded-md border border-line px-2 py-1 text-[11px] ${tone}` : `${actionBtn} ${tone} ${flash}`}
+      className={variant === "box" ? `w-14 rounded-lg border border-line-strong px-2 py-1 text-[11px] ${tone}` : `${actionBtn} ${tone} ${flash}`}
     >
       {shown}
     </button>

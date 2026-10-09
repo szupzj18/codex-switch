@@ -1,33 +1,97 @@
 import type { Account, Binding, Check, Provider, ZoruaState } from "@/lib/types";
 import { attention, DOT, type Item } from "./attention";
 import { CheckBadge } from "./check";
-import { actionBtn, dangerBtn, rowActions } from "./ui";
+import { Icon, type IconName } from "./icons";
+import { actionBtn, card, countBadge, dangerBtn, rowActions, sectionTitle } from "./ui";
 import { CopyButton, shellQuote } from "./copy";
-import { ago, Bar, PLAN_STYLE, usageNote } from "./usage";
+import { ago, Bar, barColor, peak, PLAN_STYLE, textColor, usageNote } from "./usage";
 import type { View } from "./view";
 
-function Panel({ title, count, action, children }: { title: string; count?: number; action?: React.ReactNode; children: React.ReactNode }) {
+function Panel({ title, icon, count, action, children }: { title: string; icon: IconName; count?: number; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="min-w-0">
-      <h2 className="mb-3 flex items-baseline text-sm before:mr-2 before:text-accent before:content-['#']">
+      <h2 className={sectionTitle}>
+        <Icon name={icon} className="size-4 text-dim" />
         {title}
-        {count != null && <span className="ml-2 text-xs text-dim">{count}</span>}
+        {count != null && <span className={countBadge}>{count}</span>}
         {action && <span className="ml-auto font-normal">{action}</span>}
       </h2>
-      <div className="overflow-hidden rounded-[10px] border border-line bg-panel">{children}</div>
+      <div className={card}>{children}</div>
     </section>
   );
 }
 
+function Stat({ label, value, sub, tone = "text-fg", children }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string; children?: React.ReactNode }) {
+  return (
+    <div className={`${card} p-4`}>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-dim">{label}</div>
+      <div className={`mt-1.5 text-2xl font-semibold leading-none tracking-tight tabular-nums ${tone}`}>{value}</div>
+      {children}
+      {sub != null && <div className="mt-2 truncate text-xs text-dim">{sub}</div>}
+    </div>
+  );
+}
+
+/** The numbers that answer "is anything wrong" before any row is read. */
+function Summary({ data, checks, items }: { data: ZoruaState; checks: Record<string, Check>; items: Item[] }) {
+  const signedIn = data.accounts.filter((a) => a.state !== "none").length;
+  let top: { a: Account; p: number } | null = null;
+  for (const a of data.accounts) {
+    const p = peak(a);
+    if (p != null && (!top || p > top.p)) top = { a, p };
+  }
+  const results = data.providers.map((p) => checks[p.name]).filter(Boolean);
+  const failed = results.filter((c) => c.status === "fail").length;
+  const warned = results.filter((c) => c.status === "warn").length;
+  const worst = items[0]?.tone;
+  return (
+    <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Stat label="Accounts" value={`${signedIn}/${data.accounts.length}`} sub="signed in" />
+      <Stat label="Highest usage" value={top ? `${top.p}%` : "—"} tone={top ? (top.p >= 50 ? textColor(top.p) : "text-fg") : "text-dim"} sub={top ? top.a.name : "no usage data yet"}>
+        {top && (
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line" aria-hidden>
+            <div className={`h-full rounded-full ${barColor(top.p)}`} style={{ width: `${top.p}%` }} />
+          </div>
+        )}
+      </Stat>
+      <Stat
+        label="Providers"
+        value={data.providers.length}
+        tone={failed ? "text-danger" : warned ? "text-warn" : "text-fg"}
+        sub={results.length === 0 ? "not checked yet" : failed || warned ? `${failed} failed · ${warned} warning` : `${results.length} checked, all ok`}
+      />
+      <Stat
+        label="Needs attention"
+        value={items.length}
+        tone={worst === "danger" ? "text-danger" : worst === "warn" ? "text-warn" : items.length ? "text-fg" : "text-accent"}
+        sub={items.length ? items[0].text : "all clear"}
+      />
+    </div>
+  );
+}
+
+const ITEM_BG: Record<Item["tone"], string> = {
+  danger: "border-danger/30 bg-danger/10 hover:border-danger",
+  warn: "border-warn/30 bg-warn/10 hover:border-warn",
+  info: "border-line-strong bg-panel hover:border-accent",
+};
+
 function Attention({ items, onOpen }: { items: Item[]; onOpen: (v: View) => void }) {
-  if (items.length === 0) return <p className="mb-6 text-xs text-dim">✓ nothing needs attention</p>;
+  if (items.length === 0) {
+    return (
+      <p className="mb-6 flex items-center gap-2 text-xs text-dim">
+        <Icon name="check" className="size-3.5 text-accent" />
+        nothing needs attention
+      </p>
+    );
+  }
   return (
     <section aria-label="Needs attention" className="mb-6">
-      <h2 className="mb-2 text-sm before:mr-2 before:text-accent before:content-['#']">Needs attention</h2>
+      <h2 className={sectionTitle}>Needs attention</h2>
       <ul className="flex flex-wrap gap-2">
         {items.map((i) => (
           <li key={i.key}>
-            <button type="button" onClick={() => onOpen(i.to)} className="flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-1.5 text-left text-xs hover:border-accent">
+            <button type="button" onClick={() => onOpen(i.to)} className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-left text-xs transition-colors ${ITEM_BG[i.tone]}`}>
               <span className={`size-2 shrink-0 rounded-full ${DOT[i.tone]}`} aria-hidden />
               {i.text}
             </button>
@@ -38,23 +102,31 @@ function Attention({ items, onOpen }: { items: Item[]; onOpen: (v: View) => void
   );
 }
 
+const AGENT_TONE: Record<Account["agent"], string> = { codex: "bg-info/15 text-info", claude: "bg-violet/15 text-violet" };
+const ROW = "grid grid-cols-1 gap-4 border-b border-line px-4 py-4 transition-colors last:border-b-0 hover:bg-panel-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]";
+
 function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () => void; onLogin: () => void; onRemove: () => void }) {
   const ws = a.usage.windows;
   const note = usageNote(a);
   return (
-    <li className="grid grid-cols-1 gap-4 border-b border-line px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <button type="button" onClick={onOpen} className="font-bold text-accent hover:underline">
-            {a.name}
-          </button>
-          {a.plan && <span className={`text-xs ${PLAN_STYLE[a.plan] ?? "text-fg"}`}>{a.plan}</span>}
-        </div>
-        <div className="truncate text-xs text-dim" title={a.email ?? undefined}>
-          {a.email ?? "—"}
-        </div>
-        <div className="truncate text-[11px] text-dim/70" title={a.home}>
-          {a.home}
+    <li className={ROW}>
+      <div className="flex min-w-0 items-start gap-3">
+        <span className={`grid size-9 shrink-0 place-items-center rounded-xl text-sm font-semibold uppercase ${AGENT_TONE[a.agent]}`} aria-hidden>
+          {a.name[0]}
+        </span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <button type="button" onClick={onOpen} className="font-semibold hover:text-accent">
+              {a.name}
+            </button>
+            {a.plan && <span className={`rounded-full bg-line px-2 py-px text-[11px] font-medium ${PLAN_STYLE[a.plan] ?? "text-fg"}`}>{a.plan}</span>}
+          </div>
+          <div className="truncate text-xs text-dim" title={a.email ?? undefined}>
+            {a.email ?? "—"}
+          </div>
+          <div className="truncate font-mono text-[11px] text-dim/70" title={a.home}>
+            {a.home}
+          </div>
         </div>
       </div>
       <div>
@@ -88,17 +160,17 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
 function ProviderRow({ p, check, checking, onOpen, onCheck, onRemove }: { p: Provider; check?: Check; checking: boolean; onOpen: () => void; onCheck: () => void; onRemove: () => void }) {
   const models = Object.keys(p.models);
   return (
-    <li className="grid grid-cols-1 gap-4 border-b border-line px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+    <li className={ROW}>
       <div className="min-w-0">
-        <button type="button" onClick={onOpen} className="font-bold text-accent hover:underline">
+        <button type="button" onClick={onOpen} className="font-semibold hover:text-accent">
           {p.name}
         </button>
-        <span className="ml-2 text-[11px] text-dim">{p.agent}</span>
-        <div className="truncate text-xs text-dim">{p.endpoint}</div>
+        <span className="ml-2 rounded-full bg-line px-2 py-px text-[11px] text-dim">{p.agent}</span>
+        <div className="truncate font-mono text-xs text-dim">{p.endpoint}</div>
       </div>
       <div className="min-w-0 text-xs text-dim">
         <CheckBadge check={check} checking={checking} onCheck={onCheck} />
-        <div className="mt-1">
+        <div className="mt-1.5">
           {models.length === 0 ? "no model catalog" : `${models.length} model${models.length === 1 ? "" : "s"}: ${models.slice(0, 4).join(", ")}${models.length > 4 ? " …" : ""}`}
         </div>
       </div>
@@ -117,11 +189,11 @@ function ProviderRow({ p, check, checking, onOpen, onCheck, onRemove }: { p: Pro
 
 function BindingRow({ b, onRemove }: { b: Binding; onRemove: () => void }) {
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3 last:border-b-0">
-      <span className="min-w-0 flex-1 truncate text-sm" title={b.dir}>
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3 transition-colors last:border-b-0 hover:bg-panel-2">
+      <span className="min-w-0 flex-1 truncate font-mono text-[13px]" title={b.dir}>
         {b.dir}
       </span>
-      <span className="text-xs text-accent">→ {b.name}</span>
+      <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">→ {b.name}</span>
       <CopyButton variant="action" text="copy command" label={`copy: zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
       <button type="button" onClick={onRemove} className={dangerBtn}>
         unbind
@@ -130,7 +202,26 @@ function BindingRow({ b, onRemove }: { b: Binding; onRemove: () => void }) {
   );
 }
 
-const empty = (text: string) => <li className="px-4 py-3 text-xs text-dim">{text}</li>;
+const empty = (text: string) => <li className="px-4 py-6 text-center text-xs text-dim">{text}</li>;
+
+/** Grey placeholders with the overview's shape, shown until the first read finishes. */
+export function OverviewSkeleton() {
+  const block = "animate-shimmer rounded-2xl border border-line bg-panel";
+  return (
+    <div aria-busy="true" aria-label="Loading">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className={`${block} h-[104px]`} />
+        ))}
+      </div>
+      <div className="grid gap-x-6 gap-y-8 xl:grid-cols-2">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className={`${block} h-56`} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function Overview({
   data,
@@ -162,18 +253,21 @@ export function Overview({
   const codex = accounts("codex");
   const claude = accounts("claude");
   const providers = [...data.providers].sort((x, y) => x.agent.localeCompare(y.agent) || x.name.localeCompare(y.name));
+  const items = attention(data, checks);
   return (
     <>
-      <Attention items={attention(data, checks)} onOpen={onOpen} />
+      <Summary data={data} checks={checks} items={items} />
+      <Attention items={items} onOpen={onOpen} />
       <div className="grid gap-x-6 gap-y-8 xl:grid-cols-2">
-        <Panel title="Codex" count={codex.length}>
+        <Panel title="Codex" icon="user" count={codex.length}>
           <ul>{codex.length ? codex : empty("no accounts")}</ul>
         </Panel>
-        <Panel title="Claude Code" count={claude.length}>
+        <Panel title="Claude Code" icon="user" count={claude.length}>
           <ul>{claude.length ? claude : empty("no accounts")}</ul>
         </Panel>
         <Panel
           title="Providers"
+          icon="plug"
           count={providers.length}
           action={
             providers.length > 0 && (
@@ -199,7 +293,7 @@ export function Overview({
               : empty("no providers")}
           </ul>
         </Panel>
-        <Panel title="Directory bindings" count={data.bindings.length}>
+        <Panel title="Directory bindings" icon="folder" count={data.bindings.length}>
           <ul>
             {data.bindings.length
               ? data.bindings.map((b) => <BindingRow key={`${b.dir}:${b.name}`} b={b} onRemove={() => onUnbind(b.dir)} />)

@@ -20,7 +20,7 @@ export function newest(a: Record<string, Check>, b: Record<string, Check>): Reco
   return out;
 }
 
-const TONE = { ok: "text-accent", warn: "text-warn", fail: "text-danger" } as const;
+const TONE = { ok: "bg-accent/10 text-accent", warn: "bg-warn/10 text-warn", fail: "bg-danger/10 text-danger" } as const;
 const MARK = { ok: "✓", warn: "!", fail: "✗" } as const;
 
 /** The result of the last provider check, or "not checked", with a check link. */
@@ -30,7 +30,7 @@ export function CheckBadge({ check, checking, onCheck }: { check?: Check; checki
       {checking ? (
         <span className="text-dim">checking…</span>
       ) : check ? (
-        <span className={TONE[check.status]} title={`${check.via}${check.http != null ? ` · HTTP ${check.http}` : ""}`}>
+        <span className={`rounded-full px-2.5 py-0.5 ${TONE[check.status]}`} title={`${check.via}${check.http != null ? ` · HTTP ${check.http}` : ""}`}>
           {MARK[check.status]} {check.detail}
           {check.status === "ok" && ` · ${check.ms}ms`}
           <span className="text-dim"> · {ago(Math.max(0, Math.floor(Date.now() / 1000) - check.checked_at))}</span>

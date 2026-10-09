@@ -3,11 +3,13 @@
 /* Dark is the default. Light follows the system setting unless the page forces a theme
    (data-theme on <html>, set by the switch in the sidebar and remembered in localStorage). */
 @theme {
-  --color-bg: #0b0d0c;
-  --color-panel: #111514;
-  --color-line: #1f2623;
-  --color-fg: #d7dedb;
-  --color-dim: #7b8884;
+  --color-bg: #090c0b;
+  --color-panel: #0f1312;
+  --color-panel-2: #141a18;
+  --color-line: #1c2321;
+  --color-line-strong: #2b3733;
+  --color-fg: #e6ece9;
+  --color-dim: #86948f;
   --color-accent: #5eead4;
   --color-warn: #fbbf24;
   --color-violet: #c4b5fd;
@@ -15,7 +17,49 @@
   --color-danger: #fb7185;
   --color-on-accent: #04110e;
   --color-on-danger: #1a0508;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px -20px rgb(0 0 0 / 0.7);
+  --shadow-pop: 0 24px 64px -16px rgb(0 0 0 / 0.65);
+
+  --animate-pop: pop 0.16s ease-out;
+  --animate-slide-in: slide-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-toast: toast 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes slide-in {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: none;
+    }
+  }
+  @keyframes toast {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes shimmer {
+    50% {
+      opacity: 0.45;
+    }
+  }
 }
 
 :root {
@@ -24,11 +68,13 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-bg: #f5f7f6;
+  --color-bg: #f3f6f5;
   --color-panel: #ffffff;
-  --color-line: #d8dfdc;
-  --color-fg: #18211e;
-  --color-dim: #5d6a65;
+  --color-panel-2: #f7faf9;
+  --color-line: #e0e7e4;
+  --color-line-strong: #c9d4d0;
+  --color-fg: #17201d;
+  --color-dim: #566560;
   --color-accent: #0f766e;
   --color-warn: #b45309;
   --color-violet: #6d28d9;
@@ -36,16 +82,20 @@
   --color-danger: #be123c;
   --color-on-accent: #ffffff;
   --color-on-danger: #ffffff;
+  --shadow-card: 0 1px 2px rgb(16 24 20 / 0.04), 0 12px 28px -20px rgb(16 24 20 / 0.25);
+  --shadow-pop: 0 24px 64px -16px rgb(16 24 20 / 0.35);
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     color-scheme: light;
-    --color-bg: #f5f7f6;
+    --color-bg: #f3f6f5;
     --color-panel: #ffffff;
-    --color-line: #d8dfdc;
-    --color-fg: #18211e;
-    --color-dim: #5d6a65;
+    --color-panel-2: #f7faf9;
+    --color-line: #e0e7e4;
+    --color-line-strong: #c9d4d0;
+    --color-fg: #17201d;
+    --color-dim: #566560;
     --color-accent: #0f766e;
     --color-warn: #b45309;
     --color-violet: #6d28d9;
@@ -53,12 +103,46 @@
     --color-danger: #be123c;
     --color-on-accent: #ffffff;
     --color-on-danger: #ffffff;
+    --shadow-card: 0 1px 2px rgb(16 24 20 / 0.04), 0 12px 28px -20px rgb(16 24 20 / 0.25);
+    --shadow-pop: 0 24px 64px -16px rgb(16 24 20 / 0.35);
   }
 }
 
-html,
-body {
-  background: var(--color-bg);
-  color: var(--color-fg);
-  font-family: var(--font-mono);
+@layer base {
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Paths, commands and keys stay monospaced; the rest of the page is sans. */
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
