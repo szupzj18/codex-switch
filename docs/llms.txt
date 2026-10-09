@@ -53,6 +53,8 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/uni
     zorua provider add <name> --codex --base-url URL --model ID [--wire-api responses] [--key K | --key-env VAR] [--force]
                                add a third-party Codex provider; exactly one --model is required
     zorua provider ls | show <name> | rm <name>     list (AGENT column), show (keys masked), remove
+    zorua provider get <name> [--reveal]            the provider as JSON ({agent, env|base_url,key,model,wire_api, models}); keys masked unless --reveal
+    zorua provider put <name> < doc.json            replace the provider with that JSON (a masked key keeps the stored one; agent cannot change; previous file kept as providers.json.bak)
     zorua provider models <name> [add <model-id> [alias] | rm <alias> | fetch]
                                a provider keeps a catalog of models (alias -> full id). `fetch` asks the endpoint (Claude: GET <base>/v1/models, Codex: GET <base>/models; answers {"data":[{"id":...}]}) and adds the new ones. `provider add` and `provider import cc-switch` seed the catalog from the models they already know. Aliases are derived from the id (last path segment, [1M]-style suffix dropped); the full id is what is sent
     zorua use <provider>:<model>  switch provider and pick a model of it (alias, full id or unique alias prefix); the pick is kept in ZORUA_CLAUDE_MODEL / ZORUA_CODEX_MODEL of that shell and dropped when another provider is selected

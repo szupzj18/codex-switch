@@ -268,6 +268,20 @@ zorua use - >/dev/null
 zorua provider rm glm >/dev/null
 contains "$(zorua provider ls)" "kimi" "other providers survive rm"
 not_contains "$(zorua provider ls)" "glm " "provider rm"
+# provider get / put: the JSON view the web dashboard edits
+out=$(zorua provider get kimi)
+contains "$out" '"agent": "claude"' "provider get: agent"
+not_contains "$out" "sk-kimi-secret-123456" "provider get masks the key"
+contains "$(zorua provider get kimi --reveal)" "sk-kimi-secret-123456" "provider get --reveal"
+zorua provider get kimi | zorua provider put kimi >/dev/null
+contains "$(zorua provider get kimi --reveal)" "sk-kimi-secret-123456" "a masked document keeps the stored key"
+zorua provider get kimi --reveal | sed 's#"ANTHROPIC_BASE_URL": "[^"]*"#"ANTHROPIC_BASE_URL": "https://kimi2.example.com"#' | zorua provider put kimi >/dev/null
+contains "$(zorua provider show kimi)" "kimi2.example.com" "provider put changes the base URL"
+[[ -f "$XDG_CONFIG_HOME/zorua/providers.json.bak" ]] || die "provider put must keep providers.json.bak"
+print -r -- '{"agent":"claude","env":{"ANTHROPIC_BASE_URL":"ftp://x","ANTHROPIC_AUTH_TOKEN":"abcdefghijklmnop"}}' | fails zorua provider put kimi
+print -r -- '{"agent":"codex"}' | fails zorua provider put kimi
+fails zorua provider get nope
+ok "providers: get / put"
 ok "providers: add, use, claude launch, bind, rm"
 
 python3 - "$TMP/ccswitch.db" <<'PY'
