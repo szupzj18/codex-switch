@@ -6,14 +6,29 @@ import { act } from "./manage";
 
 const field =
   "w-full rounded-md border border-line bg-bg px-2 py-1 text-xs text-fg outline-none placeholder:text-dim/60 focus:border-accent";
-const primary = "rounded-md bg-accent px-4 py-1.5 text-xs font-bold text-on-accent disabled:opacity-40";
 const ghost = "rounded-md border border-line px-3 py-1.5 text-xs text-dim hover:text-fg disabled:opacity-40";
 
 type Row = { id: number; k: string; v: string };
-type Tab = "main" | "models" | "json";
+type Status = { kind: "idle" } | { kind: "saving" } | { kind: "saved" } | { kind: "failed"; message: string };
 
 /** Same rule as zorua_providers.is_secret. */
 const isSecret = (v: string) => /TOKEN|KEY|SECRET|PASSWORD/.test(v.toUpperCase()) && !v.toUpperCase().endsWith("_TOKENS");
+
+// The few variables worth editing by hand; everything else sits under "Other variables".
+const BASE_URL = "ANTHROPIC_BASE_URL";
+const KEY_VARS = ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"];
+const ROLES: [string, string][] = [
+  ["ANTHROPIC_MODEL", "main model"],
+  ["ANTHROPIC_DEFAULT_OPUS_MODEL", "opus"],
+  ["ANTHROPIC_DEFAULT_SONNET_MODEL", "sonnet"],
+  ["ANTHROPIC_DEFAULT_HAIKU_MODEL", "haiku"],
+  ["CLAUDE_CODE_SUBAGENT_MODEL", "subagent"],
+];
+const keyVarOf = (env: Row[]) => KEY_VARS.find((v) => env.some((r) => r.k === v)) ?? KEY_VARS[0];
+
+/** JSON with sorted keys, so re-adding a variable (it lands at the end) is not a change. */
+const canon = (d: unknown) =>
+  JSON.stringify(d, (_, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v));
 
 let nextId = 1;
 const rows = (o: Record<string, string>): Row[] => Object.entries(o).map(([k, v]) => ({ id: nextId++, k, v }));
@@ -141,7 +156,16 @@ function Labeled({ label, hint, children }: { label: string; hint?: string; chil
   );
 }
 
-/** One provider as a page: every env variable, the key, the model catalog and the raw JSON. */
+/** A single-line input offering the provider's model ids as suggestions. */
+function ModelInput({ label, value, onChange, listId }: { label: string; value: string; onChange: (v: string) => void; listId: string }) {
+  return <input aria-label={label} list={listId} className={field} value={value} onChange={(e) => onChange(e.target.value)} placeholder="not set" spellCheck={false} autoComplete="off" />;
+}
+
+/**
+ * One provider as a page. There is no save button: a field is saved when it loses focus (and a
+ * change that has no focus, like deleting a row, is saved at once). The previous file is kept as
+ * providers.json.bak by `zorua provider put`.
+ */
 export function ProviderPage({
   name,
   endpoint,
@@ -151,7 +175,7 @@ export function ProviderPage({
 }: {
   name: string;
   endpoint: string;
-  onSaved: (message: string) => void;
+  onSaved: () => void;
   onDirty: (dirty: boolean) => void;
   onRemove: () => void;
 }) {
@@ -161,10 +185,12 @@ export function ProviderPage({
   const [env, setEnv] = useState<Row[]>([]);
   const [cat, setCat] = useState<Row[]>([]);
   const [codex, setCodex] = useState({ base_url: "", key: "", model: "", wire_api: "responses" });
-  const [tab, setTab] = useState<Tab>("main");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [tick, setTick] = useState(0); // bumped when an edit should be saved
+  const inflight = useRef(false);
+  const queued = useRef(false);
 
   const apply = useCallback((d: ProviderDoc) => {
     setCat(rows(d.models));
@@ -215,6 +241,27 @@ export function ProviderPage({
     return v;
   };
 
+  const keyVar = keyVarOf(env);
+  const isBasic = (k: string) => k === BASE_URL || k === keyVar || ROLES.some(([v]) => v === k);
+  const get = (v: string) => env.find((r) => r.k === v)?.v ?? "";
+  /** Set one variable by name; an empty optional one is removed instead of saved as "". */
+  const setVar = (v: string, value: string, optional = false) =>
+    setEnv((cur) => {
+      const i = cur.findIndex((r) => r.k === v);
+      if (i < 0) return value === "" && optional ? cur : [...cur, { id: nextId++, k: v, v: value }];
+      if (value === "" && optional) return cur.filter((_, j) => j !== i);
+      return cur.map((r, j) => (j === i ? { ...r, v: value } : r));
+    });
+  /** The "Other variables" table edits only the non-basic rows, in place, so the order never changes. */
+  const setOther = (next: Row[]) =>
+    setEnv((cur) => {
+      const byId = new Map(next.map((r) => [r.id, r]));
+      const have = new Set(cur.map((r) => r.id));
+      const kept = cur.flatMap((r) => (isBasic(r.k) ? [r] : byId.has(r.id) ? [byId.get(r.id)!] : []));
+      return [...kept, ...next.filter((r) => !have.has(r.id))];
+    });
+  const modelIds = [...new Set(cat.map((r) => r.v).filter(Boolean))];
+
   const toMap = (items: Row[], what: string): Record<string, string> => {
     const out: Record<string, string> = {};
     for (const r of items) {
@@ -237,47 +284,85 @@ export function ProviderPage({
     }
   }, [base, cat, env, codex]);
 
-  // Compare against what is on screen as stored: masked while hidden, real values once revealed.
+  // Compare against what is stored: masked while hidden, real values once revealed.
   const reference = revealed ? open : base;
-  const dirty = built.doc !== null && reference !== null && JSON.stringify(built.doc) !== JSON.stringify(reference);
+  const dirty = built.doc !== null && reference !== null && canon(built.doc) !== canon(reference);
 
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
   }, [dirty, onDirty]);
 
-  const save = async () => {
-    if (!built.doc) return;
-    setBusy(true);
+  const save = useCallback(async () => {
+    if (!built.doc || !dirty) return;
+    if (inflight.current) {
+      queued.current = true;
+      return;
+    }
+    inflight.current = true;
+    const sent = built.doc;
+    setStatus({ kind: "saving" });
     setError(null);
     try {
-      onSaved((await act({ action: "provider.save", name, doc: built.doc })).message);
+      await act({ action: "provider.save", name, doc: sent });
+      // Re-read what is stored (secrets masked again). A secret that was just typed turns back into
+      // its masked form unless it was edited again meanwhile; ids are kept so no field loses focus.
+      const stored = await fetchDoc(name, false);
+      setBase(stored);
+      setOpen(null);
+      setRevealed(false);
+      if (sent.agent === "claude" && stored.agent === "claude") {
+        setEnv((cur) => cur.map((r) => (isSecret(r.k) && r.v === sent.env[r.k] && stored.env[r.k] !== undefined ? { ...r, v: stored.env[r.k] } : r)));
+      } else if (sent.agent === "codex" && stored.agent === "codex") {
+        setCodex((c) => (c.key === sent.key ? { ...c, key: stored.key } : c));
+      }
+      setStatus({ kind: "saved" });
+      onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setBusy(false);
+      const message = e instanceof Error ? e.message : String(e);
+      setStatus({ kind: "failed", message });
+    } finally {
+      inflight.current = false;
+      if (queued.current) {
+        queued.current = false;
+        setTick((t) => t + 1);
+      }
     }
-  };
+  }, [built.doc, dirty, name, onSaved]);
+
+  useEffect(() => {
+    if (tick > 0) save();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick]);
+
+  useEffect(() => {
+    if (status.kind !== "saved") return;
+    const t = setTimeout(() => setStatus({ kind: "idle" }), 2000);
+    return () => clearTimeout(t);
+  }, [status]);
+
+  const commit = () => setTick((t) => t + 1);
 
   if (loadError) return <p className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{loadError}</p>;
   if (!base) return <p className="text-xs text-dim">reading {name}…</p>;
 
   const claude = base.agent === "claude";
-  const tabs: [Tab, string][] = [
-    ["main", claude ? `Environment (${env.length})` : "Connection"],
-    ["models", `Models (${cat.length})`],
-    ["json", "JSON"],
-  ];
+  const failure = status.kind === "failed" ? status.message : (error ?? built.problem);
+  const other = env.filter((r) => !isBasic(r.k));
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        save();
-      }}
-      autoComplete="off"
-    >
+    <form onSubmit={(e) => e.preventDefault()} onBlur={commit} autoComplete="off">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="text-sm text-dim">
           {claude ? "Claude Code" : "Codex"} provider · <span className="text-fg">{endpoint}</span>
+        </span>
+        <span className="text-xs" aria-live="polite">
+          {status.kind === "saving" ? (
+            <span className="text-dim">saving…</span>
+          ) : status.kind === "saved" ? (
+            <span className="text-accent">✓ saved</span>
+          ) : dirty && status.kind !== "failed" ? (
+            <span className="text-warn">editing — saves when you leave the field</span>
+          ) : null}
         </span>
         <span className="ml-auto flex gap-4 text-xs">
           <button type="button" className="text-dim underline hover:text-accent" onClick={toggleReveal}>
@@ -289,42 +374,50 @@ export function ProviderPage({
         </span>
       </div>
       <p className="mt-1 text-[11px] text-dim">
-        {claude ? "These variables are what `claude` runs with while this provider is active." : "Codex gets this endpoint, key and model through -c overrides."} Keys are masked until{" "}
-        <b className="text-fg">show keys</b>.
+        {claude ? "What `claude` runs with while this provider is active." : "Codex gets this endpoint, key and model through -c overrides."} Changes are saved when you leave a field; the previous file is kept as
+        providers.json.bak. Keys are masked until <b className="text-fg">show keys</b>.
       </p>
 
-      <div role="tablist" className="mt-4 flex gap-1 border-b border-line">
-        {tabs.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => setTab(id)}
-            className={`-mb-px border-b-2 px-3 py-2 text-xs ${tab === id ? "border-accent text-accent" : "border-transparent text-dim hover:text-fg"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {failure && (
+        <p className="mt-3 flex items-center gap-3 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+          <span className="min-w-0 flex-1 break-words">{status.kind === "failed" ? `not saved: ${failure}` : failure}</span>
+          {status.kind === "failed" && (
+            <button type="button" className={ghost} onClick={commit}>
+              retry
+            </button>
+          )}
+        </p>
+      )}
 
-      <div className="mt-4 rounded-[10px] border border-line bg-panel p-4">
-        {tab === "main" &&
-          (claude ? (
+      <div className="mt-4 overflow-hidden rounded-[10px] border border-line bg-panel">
+        <div className="grid gap-3 p-4">
+          {claude ? (
             <>
-              <p className="mb-3 text-[11px] text-dim/70">ANTHROPIC_BASE_URL and a key (ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY) are required. Highlighted values are secrets.</p>
-              <Table
-                items={env}
-                onChange={setEnv}
-                secret={isSecret}
-                keyLabel="variable"
-                valueLabel="value"
-                addLabel="add variable"
-                copy={(r) => copyValue(r.v, base.agent === "claude" ? base.env[r.k] : undefined, (d) => (d.agent === "claude" ? d.env[r.k] : undefined))}
-              />
+              <Labeled label="base URL">
+                <Value label="base URL" value={get(BASE_URL)} onChange={(v) => setVar(BASE_URL, v)} />
+              </Labeled>
+              <Labeled label="key" hint={keyVar}>
+                <span className="flex items-start gap-2">
+                  <span className="min-w-0 flex-1">
+                    <Value label="key" className="text-warn" value={get(keyVar)} onChange={(v) => setVar(keyVar, v)} />
+                  </span>
+                  <CopyButton label="copy key" get={() => copyValue(get(keyVar), base.agent === "claude" ? base.env[keyVar] : undefined, (d) => (d.agent === "claude" ? d.env[keyVar] : undefined))} />
+                </span>
+              </Labeled>
+              <div className="mt-1 border-t border-line pt-3 text-[11px] text-dim/70">Models Claude Code asks for; leave a line empty to use its default.</div>
+              {ROLES.map(([v, label]) => (
+                <Labeled key={v} label={label} hint={v}>
+                  <ModelInput label={label} listId="model-ids" value={get(v)} onChange={(x) => setVar(v, x, true)} />
+                </Labeled>
+              ))}
+              <datalist id="model-ids">
+                {modelIds.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
             </>
           ) : (
-            <div className="grid gap-3">
+            <>
               <Labeled label="base URL">
                 <Value label="base URL" value={codex.base_url} onChange={(v) => setCodex({ ...codex, base_url: v })} />
               </Labeled>
@@ -340,38 +433,51 @@ export function ProviderPage({
                 <Value label="model" value={codex.model} onChange={(v) => setCodex({ ...codex, model: v })} />
               </Labeled>
               <Labeled label="wire API">
-                <select className={field} value={codex.wire_api} onChange={(e) => setCodex({ ...codex, wire_api: e.target.value })}>
+                <select
+                  className={field}
+                  value={codex.wire_api}
+                  onChange={(e) => {
+                    setCodex({ ...codex, wire_api: e.target.value });
+                    commit();
+                  }}
+                >
                   <option value="responses">responses</option>
                   <option value="chat">chat</option>
                 </select>
               </Labeled>
+            </>
+          )}
+        </div>
+
+        <details className="border-t border-line">
+          <summary className="cursor-pointer px-4 py-2.5 text-xs text-dim hover:text-fg">Models ({cat.length}) · alias → model id, used by `zorua use {name}:&lt;alias&gt;`</summary>
+          <div className="px-4 pb-4">
+            <Table items={cat} onChange={(r) => { setCat(r); if (r.length < cat.length) commit(); }} keyLabel="alias" valueLabel="model id" addLabel="add model" />
+          </div>
+        </details>
+        {claude && (
+          <details className="border-t border-line">
+            <summary className="cursor-pointer px-4 py-2.5 text-xs text-dim hover:text-fg">Other variables ({other.length})</summary>
+            <div className="px-4 pb-4">
+              <Table
+                items={other}
+                onChange={(r) => {
+                  setOther(r);
+                  if (r.length < other.length) commit();
+                }}
+                secret={isSecret}
+                keyLabel="variable"
+                valueLabel="value"
+                addLabel="add variable"
+                copy={(r) => copyValue(r.v, base.agent === "claude" ? base.env[r.k] : undefined, (d) => (d.agent === "claude" ? d.env[r.k] : undefined))}
+              />
             </div>
-          ))}
-        {tab === "models" && (
-          <>
-            <p className="mb-3 text-[11px] text-dim/70">alias → full model id. `zorua use {name}:&lt;alias&gt;` picks one for a shell.</p>
-            <Table items={cat} onChange={setCat} keyLabel="alias" valueLabel="model id" addLabel="add model" />
-          </>
+          </details>
         )}
-        {tab === "json" && (
-          <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all text-[11px] text-dim">{built.doc ? JSON.stringify(built.doc, null, 2) : built.problem}</pre>
-        )}
-      </div>
-
-      {(error || built.problem) && <p className="mt-3 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{error ?? built.problem}</p>}
-
-      <div className="sticky bottom-0 mt-4 flex flex-wrap items-center gap-3 border-t border-line bg-bg/95 py-3 backdrop-blur">
-        <span className="text-[11px] text-dim/70">
-          {dirty ? <span className="text-warn">unsaved changes</span> : "saved"} · saving keeps the previous file as providers.json.bak; shells that already launched claude keep their old settings
-        </span>
-        <span className="ml-auto flex gap-2">
-          <button type="button" className={ghost} disabled={!dirty} onClick={() => reference && apply(reference)}>
-            discard
-          </button>
-          <button type="submit" className={primary} disabled={busy || !dirty || !built.doc}>
-            {busy ? "saving…" : "save"}
-          </button>
-        </span>
+        <details className="border-t border-line">
+          <summary className="cursor-pointer px-4 py-2.5 text-xs text-dim hover:text-fg">JSON</summary>
+          <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-all px-4 pb-4 text-[11px] text-dim">{built.doc ? JSON.stringify(built.doc, null, 2) : built.problem}</pre>
+        </details>
       </div>
     </form>
   );

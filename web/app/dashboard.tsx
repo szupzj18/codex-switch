@@ -60,7 +60,6 @@ export default function Dashboard() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loginFor, setLoginFor] = useState<string | null>(null);
   const [view, setView] = useState<View>({ kind: "overview" });
-  const [rev, setRev] = useState(0); // bumped after a save so the provider page re-reads the file
   const dirty = useRef(false);
   const applied = useRef(HOME);
 
@@ -195,14 +194,11 @@ export default function Dashboard() {
           {data && view.kind === "provider" &&
             (provider ? (
               <ProviderPage
-                key={`${provider.name}:${rev}`}
+                key={provider.name}
                 name={provider.name}
                 endpoint={provider.endpoint}
                 onDirty={setDirty}
-                onSaved={(m) => {
-                  setRev((r) => r + 1);
-                  finished(m);
-                }}
+                onSaved={() => load(true)}
                 onRemove={() => setDialog({ kind: "remove-provider", name: provider.name })}
               />
             ) : (
