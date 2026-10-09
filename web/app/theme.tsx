@@ -28,6 +28,11 @@ export function setThemeMode(m: Mode) {
   window.dispatchEvent(new Event(EVENT));
 }
 
+/** auto → light → dark → auto, for the `t` shortcut. */
+export function cycleTheme() {
+  setThemeMode(MODES[(MODES.indexOf(readMode()) + 1) % MODES.length]);
+}
+
 /** Applied before first paint by THEME_SCRIPT in layout.tsx; this is the interactive half. */
 export function ThemeSwitch() {
   const [mode, setMode] = useState<Mode>("auto");

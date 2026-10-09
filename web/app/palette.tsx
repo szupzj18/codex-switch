@@ -8,6 +8,8 @@ export type Command = {
   group: string;
   label: string;
   hint?: string;
+  /** Shown as a key cap on the right (the shortcut that does the same thing). */
+  shortcut?: string;
   icon?: IconName;
   /** Extra words the search also matches. */
   keywords?: string;
@@ -29,10 +31,10 @@ function search(commands: Command[], q: string): Command[] {
 }
 
 /** ⌘K: jump to an account or provider, run an action, copy a command. Mounted only while open. */
-export function Palette({ commands, onClose }: { commands: Command[]; onClose: () => void }) {
+export function Palette({ commands, initial = "", onClose }: { commands: Command[]; initial?: string; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initial);
   const [active, setActive] = useState(0);
   const uid = useId();
   const shown = useMemo(() => search(commands, q), [commands, q]);
@@ -118,6 +120,7 @@ export function Palette({ commands, onClose }: { commands: Command[]; onClose: (
                 {c.icon && <Icon name={c.icon} className={i === current ? "" : "text-dim"} />}
                 <span className="min-w-0 flex-1 truncate">{c.label}</span>
                 {c.hint && <span className="truncate text-xs text-dim">{c.hint}</span>}
+                {c.shortcut && <kbd className="rounded border border-line-strong px-1.5 py-px font-mono text-[10px] text-dim">{c.shortcut}</kbd>}
                 {i === current && <Icon name="enter" className="size-3.5" />}
               </div>
             </div>
@@ -128,6 +131,7 @@ export function Palette({ commands, onClose }: { commands: Command[]; onClose: (
         <span>↑↓ select</span>
         <span>↵ run</span>
         <span>esc close</span>
+        <span className="ml-auto tabular-nums">{shown.length} {shown.length === 1 ? "result" : "results"}</span>
       </div>
     </dialog>
   );
