@@ -60,6 +60,7 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/uni
                                copy cc-switch's custom Claude and Codex providers that carry their own key; reads its database read-only, skips official logins and entries that point at cc-switch's local proxy
     zorua use <name>              set CODEX_HOME (Codex account), CLAUDE_CONFIG_DIR (Claude account) or the provider slot of its agent (ZORUA_CLAUDE_PROVIDER / ZORUA_CODEX_PROVIDER) for THIS shell only; one Claude and one Codex provider can be active together
     zorua use -   |  zorua off       clear the switch (back to the default account ~/.codex)
+    zorua off providers           clear only the providers of this shell, keep the accounts
     zorua <name> [args]           one-shot: run `codex` (or `claude`, for a Claude account) under that account or provider, e.g. zorua work exec "summarize this repo"; for Claude accounts inherited ANTHROPIC_* / CLAUDE_CODE_USE_* / CLAUDE_CODE_OAUTH_TOKEN are removed for the run
     zorua bind [name]             bind the current directory (and subdirectories) to an account; auto-switch on cd
     zorua unbind [dir]            remove a binding
