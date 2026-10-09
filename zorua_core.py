@@ -842,7 +842,16 @@ def cmd_model(args, st):
     return 0
 
 
-def cmd_off(st):
+def cmd_off(st, args=()):
+    if args and args[0] in ("provider", "providers") and len(args) == 1:
+        for k in PROVIDER_AGENT:
+            st.set_home(k, "")
+        st.prompt()
+        print("cleared the providers; accounts (CODEX_HOME, CLAUDE_CONFIG_DIR) kept")
+        return 0
+    if args:
+        err("usage: zorua off [providers]")
+        return 1
     for k in KINDS:
         st.set_home(k, "")
     st.prompt()
@@ -1597,6 +1606,7 @@ HELP = """  zorua                         list accounts, emails, plan and subscr
                                 account, e.g.  zorua work exec "..."
   zorua login <name>            run codex login (or claude auth login) for one account
   zorua off                     clear the switch
+  zorua off providers           clear only the providers, keep the accounts
   zorua add <name>              create a Codex account (new CODEX_HOME + sign-in)
                                 [--home DIR] [--no-login] [--device-auth]
   zorua add --claude <name>     create a Claude Code subscription account (own
@@ -1716,7 +1726,7 @@ def main(argv):
     elif sub == "use":
         rc = cmd_use(rest, st)
     elif sub in ("off", "reset", "unset"):
-        rc = cmd_off(st)
+        rc = cmd_off(st, rest)
     elif sub == "login":
         rc = cmd_login(rest)
     elif sub == "setup":

@@ -262,6 +262,7 @@ are blanked, so a relay's model names do not leak into another provider.
 | `zorua add … --no-login` / `--device-auth` | Skip sign-in / headless sign-in (Codex) |
 | `zorua login <name>` | (Re)run the sign-in of one account |
 | `zorua use <name>` / `zorua use -` / `zorua off` | Switch this shell to an account / back to defaults |
+| `zorua off providers` | Clear only the providers of this shell, keep the accounts |
 | `zorua <name> [args…]` | One-shot: run `codex` or `claude` under that account |
 | `zorua bind [name]` / `unbind [dir]` / `binds` | Manage directory bindings |
 | `zorua provider add\|ls\|show\|rm\|import` | Manage third-party Claude Code and Codex providers (see above) |

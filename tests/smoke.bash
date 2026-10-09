@@ -418,6 +418,17 @@ out=$(PATH="$TMP/bin:$PATH" zorua ds exec hi)
 contains "$out" 'model_provider="zorua_ds"' "one-shot codex provider"
 zorua use - >/dev/null
 [ -z "${ZORUA_CODEX_PROVIDER:-}" ] && [ -z "${ZORUA_CLAUDE_PROVIDER:-}" ] || die "use - must clear both provider slots"
+zorua add provoff --no-login --home "$TMP/provoff-home" >/dev/null
+zorua use provoff >/dev/null; zorua use kimi >/dev/null; zorua use ds >/dev/null
+fails zorua off bogus
+[ "$ZORUA_CLAUDE_PROVIDER" = kimi ] || die "a bad off argument must change nothing"
+zorua off providers >/dev/null
+[ -z "${ZORUA_CODEX_PROVIDER:-}" ] && [ -z "${ZORUA_CLAUDE_PROVIDER:-}" ] || die "off providers must clear both provider slots"
+[ "$CODEX_HOME" = "$TMP/provoff-home" ] || die "off providers must keep the account"
+zorua off >/dev/null
+[ -z "${CODEX_HOME:-}" ] || die "off must still clear the account"
+zorua rm provoff >/dev/null
+ok "off providers clears providers only"
 out=$(PATH="$TMP/bin:$PATH" codex exec hi)
 not_contains "$out" "model_provider" "codex untouched without a provider"
 not_contains "$out" "KEY=sk-" "no key without a provider"
