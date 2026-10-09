@@ -192,7 +192,31 @@ zorua bind deepseek        # this directory switches to deepseek automatically
 zorua provider import cc-switch --dry-run     # preview copying providers out of cc-switch
 ```
 
-How it works. While a provider is active, Zorua's `claude` / `codex` shell function starts
+### Many models per provider
+
+A relay often serves a dozen models. A provider keeps a catalog of them, and each terminal
+picks one:
+
+```zsh
+zorua provider models relay fetch              # ask the endpoint (GET /v1/models) for its list
+zorua provider models relay add vendor/some-model nice   # or add one by hand, with an alias
+zorua use relay:es1                            # switch provider and model together
+zorua model                                    # list the active provider's models (● = picked)
+zorua model seed                               # pick another one; alias, full id or a unique prefix
+zorua model -                                  # back to the provider's own default
+zorua relay:es1 -p "hi"                        # one-shot on a given model
+```
+
+The pick lives in `ZORUA_CLAUDE_MODEL` / `ZORUA_CODEX_MODEL` of that terminal and is dropped
+when you switch to another provider. It replaces the main model only: Claude Code gets it as
+`ANTHROPIC_MODEL`, Codex as the `-c model=…` override. The Opus/Sonnet/Haiku mapping of a
+Claude provider stays as configured. Aliases are made from the id (`model_hub/es1_orange_o50[1M]`
+becomes `es1_orange_o50`); the full id, including suffixes such as `[1M]`, is what is sent.
+`provider add` and `provider import cc-switch` seed the catalog from the models they already know.
+
+### How it works
+
+While a provider is active, Zorua's `claude` / `codex` shell function starts
 the agent with the provider applied, and passes straight through when none is active.
 
 | | Claude Code | Codex |
@@ -241,7 +265,9 @@ are blanked, so a relay's model names do not leak into another provider.
 | `zorua <name> [args…]` | One-shot: run `codex` or `claude` under that account |
 | `zorua bind [name]` / `unbind [dir]` / `binds` | Manage directory bindings |
 | `zorua provider add\|ls\|show\|rm\|import` | Manage third-party Claude Code and Codex providers (see above) |
-| `zorua use <provider>` / `zorua <provider> [args…]` | Switch this shell to a provider / one-shot run |
+| `zorua use <provider>[:<model>]` / `zorua <provider>[:<model>] [args…]` | Switch this shell to a provider (and a model of it) / one-shot run |
+| `zorua model [alias\|-]` | List / pick / clear the model of the active provider |
+| `zorua provider models <name> [add\|rm\|fetch]` | Manage a provider's model catalog |
 | `zorua rm <name> [--purge]` | Unregister an account (data kept unless `--purge` or confirmed) |
 | `zorua hook install\|remove\|status\|refresh` | Claude usage relay (see above) |
 | `zorua prompt` | Print the prompt marker |

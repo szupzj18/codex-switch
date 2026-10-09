@@ -12,6 +12,7 @@ import base64
 import json
 import math
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -33,7 +34,7 @@ ACCOUNT_FILE = os.path.join(CONFIG_DIR, "accounts.tsv")
 BINDING_FILE = os.path.join(CONFIG_DIR, "bindings.tsv")
 CLAUDE_FILE = os.path.join(CONFIG_DIR, "claude-accounts.tsv")
 SHELL = os.environ.get("ZORUA_SHELL", "zsh")
-RESERVED = {"provider", "launch", "ls", "list", "status", "usage", "setup", "use", "login", "off", "reset",
+RESERVED = {"provider", "launch", "model", "ls", "list", "status", "usage", "setup", "use", "login", "off", "reset",
             "unset", "help", "add", "rm", "bind", "unbind", "binds", "version",
             "prompt", "apply", "names", "hook", "-h", "--help", "-v", "--version"}
 
@@ -201,6 +202,8 @@ VARS = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR",
         "claude_provider": "ZORUA_CLAUDE_PROVIDER", "codex_provider": "ZORUA_CODEX_PROVIDER"}
 KINDS = tuple(VARS)
 PROVIDER_AGENT = {"claude_provider": "claude", "codex_provider": "codex"}
+# The model picked inside the active provider of each agent (an alias from the provider's catalog).
+MODEL_VAR = {"claude_provider": "ZORUA_CLAUDE_MODEL", "codex_provider": "ZORUA_CODEX_MODEL"}
 AGENT_PROVIDER = {a: k for k, a in PROVIDER_AGENT.items()}
 
 
@@ -309,6 +312,7 @@ class State:
         self.home = {k: os.environ.get(v, "") for k, v in VARS.items()}
         self.auto = {k: os.environ.get(AUTO_VARS[k][0], "") for k in VARS}
         self.pre = {k: os.environ.get(AUTO_VARS[k][2], "") for k in VARS}
+        self.model = {k: os.environ.get(v, "") for k, v in MODEL_VAR.items()}
 
     def set_home(self, kind, home):
         self.home[kind] = home or ""
@@ -316,6 +320,15 @@ class State:
             EMIT.export(VARS[kind], home)
         else:
             EMIT.unset(VARS[kind])
+        if kind in MODEL_VAR:                 # a different provider starts without a model pick
+            self.set_model(kind, "")
+
+    def set_model(self, kind, alias):
+        self.model[kind] = alias
+        if alias:
+            EMIT.export(MODEL_VAR[kind], alias)
+        else:
+            EMIT.unset(MODEL_VAR[kind])
 
     def set_auto(self, kind, auto, pre):
         self.auto[kind], self.pre[kind] = auto, pre
@@ -340,7 +353,8 @@ class State:
                 parts.append("%s:%s:auto" % (kind.replace("_", "-"), name))
             else:
                 kinds.add("manual")
-                parts.append("%s:%s" % (kind.replace("_", "-"), name))
+                parts.append("%s:%s%s" % (kind.replace("_", "-"), name,
+                                          "/" + self.model[kind] if self.model.get(kind) else ""))
         kind = "auto" if "auto" in kinds else "custom" if "custom" in kinds else "manual" if kinds else ""
         return kind, first, ("[%s]" % " ".join(parts)) if parts else ""
 
@@ -738,8 +752,18 @@ def claude_override_warning(home):
             % (", ".join(present), "is" if len(present) == 1 else "are"))
 
 
+def pick_model(st, kind, prov, sel):
+    """Select model `sel` of the provider just activated for `kind`. -> exit code"""
+    mid = zp.resolve_model(prov, sel)
+    if mid is None:
+        err("zorua: unknown model '%s' for this provider (models: %s)" % (sel, " ".join(zp.models(prov)) or "none; add some with zorua provider models <name> add|fetch"))
+        return 1
+    st.set_model(kind, zp.selected_alias(prov, mid))
+    return 0
+
+
 def cmd_use(args, st):
-    name = args[0] if args else ""
+    name, _, msel = (args[0] if args else "").partition(":")
     if not name or name == "-":
         for k in KINDS:
             st.set_home(k, "")
@@ -751,12 +775,20 @@ def cmd_use(args, st):
         names = all_names()
         err("zorua: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
         return 1
+    if msel and not is_provider(kind):
+        err("zorua: only providers have models; '%s' is an account" % name)
+        return 1
     home = registry(kind)[name]
     if is_provider(kind):
         agent = PROVIDER_AGENT[kind]
+        prov = zp.load(CONFIG_DIR)[name]
+        if msel and zp.resolve_model(prov, msel) is None:
+            return pick_model(st, kind, prov, msel)           # reports the error before anything changes
         st.set_home(kind, name)
-        print("this shell -> %s provider: %s (%s); plain '%s' in this shell now uses it"
-              % (agent, name, zp.endpoint(zp.load(CONFIG_DIR)[name]), agent))
+        if msel:
+            pick_model(st, kind, prov, msel)
+        print("this shell -> %s provider: %s (%s)%s; plain '%s' in this shell now uses it"
+              % (agent, name, zp.endpoint(prov), ", model " + st.model[kind] if st.model[kind] else "", agent))
         st.prompt()
         return 0
     if not os.path.isdir(home):
@@ -769,6 +801,43 @@ def cmd_use(args, st):
         claude_override_warning(home)
     print("this shell -> %s account: %s" % (kind, name))
     st.prompt()
+    return 0
+
+
+def cmd_model(args, st):
+    """zorua model            list the models of the active provider(s)
+       zorua model <alias>    pick one for the active provider that has it
+       zorua model -          back to the provider's own default"""
+    provs = zp.load(CONFIG_DIR)
+    active = [(k, st.home[k], provs[st.home[k]]) for k in MODEL_VAR if st.home.get(k) in provs]
+    if not active:
+        err("zorua: no provider is active in this shell (zorua use <provider>)")
+        return 1
+    if not args:
+        for k, name, prov in active:
+            cat = zp.models(prov)
+            print("%s provider %s%s" % (PROVIDER_AGENT[k], name, "" if cat else "  (no models yet: zorua provider models %s add|fetch)" % name))
+            for alias, mid in cat.items():
+                print("  %s %-24s %s" % ("●" if st.model[k] == alias else " ", alias, mid))
+        return 0
+    sel = args[0]
+    if sel == "-":
+        for k, _, _ in active:
+            st.set_model(k, "")
+        st.prompt()
+        print("model: back to the provider's default")
+        return 0
+    hits = [(k, name, prov) for k, name, prov in active if zp.resolve_model(prov, sel) is not None]
+    if not hits:
+        err("zorua: no active provider has a model '%s' (try: zorua model)" % sel)
+        return 1
+    if len(hits) > 1:
+        err("zorua: '%s' matches the Claude and the Codex provider; use  zorua use <provider>:%s" % (sel, sel))
+        return 1
+    k, name, prov = hits[0]
+    pick_model(st, k, prov, sel)
+    st.prompt()
+    print("%s provider %s -> model %s (%s)" % (PROVIDER_AGENT[k], name, st.model[k], zp.resolve_model(prov, sel)))
     return 0
 
 
@@ -983,21 +1052,36 @@ def _provider_for(agent, name):
     return prov
 
 
-def launch_claude(name, args):
-    """Replace this process with claude running on provider `name`."""
+def _chosen_model(prov, sel):
+    """-> model id for the alias picked in this shell, or None for the provider's own default"""
+    if not sel:
+        return None
+    mid = zp.resolve_model(prov, sel)
+    if mid is None:
+        err("zorua: model '%s' is not in this provider's list any more; using its default (zorua model -)" % sel)
+    return mid
+
+
+def launch_claude(name, args, model_sel=""):
+    """Replace this process with claude running on provider `name` (optionally on one of its models)."""
     prov = _provider_for("claude", name)
     if prov is None:
         return _exec_agent("claude", [], dict(os.environ), args)
-    settings = zp.write_settings(CONFIG_DIR, name, zp.settings_for(os.environ, prov["env"]))
-    return _exec_agent("claude", ["--settings", settings], zp.process_env(os.environ, prov["env"]), args)
+    env = dict(prov["env"])
+    mid = _chosen_model(prov, model_sel)
+    if mid:
+        env["ANTHROPIC_MODEL"] = mid
+    settings = zp.write_settings(CONFIG_DIR, name, zp.settings_for(os.environ, env))
+    return _exec_agent("claude", ["--settings", settings], zp.process_env(os.environ, env), args)
 
 
-def launch_codex(name, args):
+def launch_codex(name, args, model_sel=""):
     """Replace this process with codex running on provider `name` (key via env, config via -c)."""
     prov = _provider_for("codex", name)
     if prov is None:
         return _exec_agent("codex", [], dict(os.environ), args)
-    return _exec_agent("codex", zp.codex_args(name, prov), zp.codex_env(os.environ, prov), args)
+    return _exec_agent("codex", zp.codex_args(name, prov, _chosen_model(prov, model_sel)),
+                       zp.codex_env(os.environ, prov), args)
 
 
 def read_key(flag_key, key_env):
@@ -1083,6 +1167,7 @@ def provider_add(args):
         err("zorua provider add: %s" % e)
         return 1
     provs = zp.load(CONFIG_DIR)
+    zp.add_models(prov, [prov["model"]] if codex else zp.env_models(prov["env"]))
     provs[name] = prov
     zp.save(CONFIG_DIR, provs)
     print("added %s provider: %s -> %s  (zorua use %s, or: zorua %s)" % (zp.agent(prov), name, zp.endpoint(prov), name, name))
@@ -1133,9 +1218,63 @@ def provider_show(args):
     p = provs[name]
     print("agent=%s" % zp.agent(p))
     items = p["env"] if zp.agent(p) == "claude" else {k: v for k, v in p.items() if k != "kind"}
-    for var, val in sorted(items.items()):
+    for var, val in sorted((k, v) for k, v in items.items() if k != "models"):
         print("%s=%s" % (var, zp.shown(var, val)))
+    for alias, mid in zp.models(p).items():
+        print("model %s = %s" % (alias, mid))
     return 0
+
+
+def provider_models(args):
+    provs = zp.load(CONFIG_DIR)
+    name = args[0] if args else ""
+    if name not in provs:
+        err("usage: zorua provider models <provider> [add <model-id> [alias] | rm <alias> | fetch]")
+        return 1
+    p = provs[name]
+    action, rest = (args[1] if len(args) > 1 else "ls"), args[2:]
+    if action in ("ls", "list"):
+        cat = zp.models(p)
+        if not cat:
+            print("(no models yet — zorua provider models %s add <model-id> [alias], or: fetch)" % name)
+        for alias, mid in cat.items():
+            print("  %-24s %s" % (alias, mid))
+        return 0
+    if action == "add":
+        if not rest:
+            err("usage: zorua provider models %s add <model-id> [alias]" % name)
+            return 1
+        mid, alias = rest[0], (rest[1] if len(rest) > 1 else "")
+        cat = zp.models(p)
+        if alias:
+            if not re.match(r"^[A-Za-z0-9_.-]+$", alias) or alias in cat:
+                err("zorua: alias must be new and match [A-Za-z0-9_.-]: %s" % alias)
+                return 1
+            cat[alias] = mid
+            p["models"] = cat
+        elif not zp.add_models(p, [mid]):
+            err("zorua: model already listed: %s" % mid)
+            return 1
+    elif action == "rm":
+        cat = zp.models(p)
+        if not rest or rest[0] not in cat:
+            err("zorua: unknown alias '%s' (models: %s)" % (rest[0] if rest else "", " ".join(cat) or "none"))
+            return 1
+        del cat[rest[0]]
+        p["models"] = cat
+    elif action == "fetch":
+        try:
+            ids = zp.fetch_models(p)
+        except RuntimeError as e:
+            err("zorua: could not fetch models: %s" % e)
+            return 1
+        n = zp.add_models(p, ids)
+        print("%s offers %d model(s); %d new" % (name, len(ids), n))
+    else:
+        err("usage: zorua provider models <provider> [add <model-id> [alias] | rm <alias> | fetch]")
+        return 1
+    zp.save(CONFIG_DIR, provs)
+    return provider_models([name])
 
 
 def provider_import(args):
@@ -1162,6 +1301,9 @@ def provider_import(args):
         return 1
     try:
         found = [(d, {"env": e}) for d, e in zp.cc_switch_providers(db)] + zp.cc_switch_codex_providers(db)
+        for _, prov in found:
+            if zp.agent(prov) == "claude":
+                zp.add_models(prov, zp.env_models(prov["env"]))
     except Exception as e:
         err("zorua: cannot read %s: %s" % (db, e))
         return 1
@@ -1202,9 +1344,11 @@ def cmd_provider(args):
         return provider_rm(rest)
     if sub == "show":
         return provider_show(rest)
+    if sub in ("models", "model"):
+        return provider_models(rest)
     if sub == "import":
         return provider_import(rest)
-    err("usage: zorua provider [ls | add <name> --base-url URL ... | show <name> | rm <name> | import cc-switch]")
+    err("usage: zorua provider [ls | add <name> --base-url URL ... | show <name> | rm <name> | models <name> ... | import cc-switch]")
     return 1
 
 
@@ -1440,6 +1584,10 @@ HELP = """  zorua                         list accounts, emails, plan and subscr
   zorua provider add <name> --codex --base-url URL --model ID [--wire-api responses]
                                 add a third-party Codex endpoint
   zorua provider ls|show|rm     list / show (keys masked) / remove providers
+  zorua provider models <name> [add <model-id> [alias] | rm <alias> | fetch]
+                                a provider can hold many models; fetch asks its endpoint for the list
+  zorua use <provider>:<model>  switch provider and pick a model of it in one go (alias, id or prefix)
+  zorua model [alias | -]       list / pick / clear the model of the active provider
   zorua provider import cc-switch [--dry-run] [--force]
                                 copy custom Claude and Codex providers out of cc-switch (read-only)
   zorua use <provider>          this shell's plain `claude` (or `codex`) runs on the provider; one
@@ -1566,12 +1714,15 @@ def main(argv):
         rc = cmd_hook(rest)
     elif sub == "provider":
         rc = cmd_provider(rest)
+    elif sub == "model":
+        rc = cmd_model(rest, st)
     elif sub == "launch":
         if not rest or rest[0] not in zp.AGENTS:
             err("usage: zorua launch claude|codex [args]   (used by the claude / codex shell functions)")
             return 1
         fn = launch_claude if rest[0] == "claude" else launch_codex
-        return fn(os.environ.get(VARS[AGENT_PROVIDER[rest[0]]], ""), rest[1:])
+        kind = AGENT_PROVIDER[rest[0]]
+        return fn(os.environ.get(VARS[kind], ""), rest[1:], os.environ.get(MODEL_VAR[kind], ""))
     elif sub == "prompt":
         print(st.prompt_info()[2])
     elif sub == "apply":
@@ -1579,9 +1730,18 @@ def main(argv):
     elif sub == "names":
         print("\n".join(all_names()))
     else:
+        sub, _, msel = sub.partition(":")
         kind = kind_of(sub)
+        if msel and not is_provider(kind):
+            err("zorua: only providers have models; '%s' is not a provider" % sub)
+            return 1
         if is_provider(kind):
-            return (launch_claude if PROVIDER_AGENT[kind] == "claude" else launch_codex)(sub, rest)
+            prov = zp.load(CONFIG_DIR)[sub]
+            if msel and zp.resolve_model(prov, msel) is None:
+                err("zorua: unknown model '%s' for %s (models: %s)" % (msel, sub, " ".join(zp.models(prov)) or "none"))
+                return 1
+            fn = launch_claude if PROVIDER_AGENT[kind] == "claude" else launch_codex
+            return fn(sub, rest, msel)
         if kind:
             home = registry(kind)[sub]
             EMIT.flush()
