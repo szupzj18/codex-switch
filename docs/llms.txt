@@ -42,7 +42,7 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/uni
         --device-auth            headless device-code sign-in
         --no-login               register without signing in (then: zorua login <name>)
         --home DIR               register an existing directory instead of ~/.codex-<name>
-    zorua add --claude <name>     create a Claude Code subscription account (home ~/.claude-<name>) and run `claude auth login`
+    zorua add --claude <name>     create a Claude Code subscription account (home ~/.claude-<name>) and run `claude auth login`; if ~/.config/zorua/claude-settings.json exists it is copied to the new account's settings.json (never overwriting)
         --home DIR / --no-login also apply; --device-auth does not (Codex only)
     zorua hook install|remove|status <claude-account> [--dry-run]
                                wrap that account's Claude Code status-line command in a relay that caches rate_limits (5h/7d, claude.ai Pro/Max) to <config dir>/.zorua-usage.json so `zorua usage` can show them; reads no credentials, original command is preserved, settings.json is backed up. If the account has NO status line, install adds a minimal one and requires --yes (or an interactive confirmation) because Claude Code hides most footer keyboard hints while a status line is configured; remove deletes it again. The installed command uses $HOME-relative paths and falls back to the original command if the relay or python3 is missing; `zorua hook status` (no name) lists all Claude accounts and `zorua hook remove --all` restores them all (uninstall.sh --purge does this)
