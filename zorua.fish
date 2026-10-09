@@ -10,8 +10,10 @@ set -g ZORUA_AUTO_ACTIVE ""
 set -g _ZORUA_PRE_AUTO_HOME ""
 set -g ZORUA_AUTO_CLAUDE ""
 set -g _ZORUA_PRE_AUTO_CLAUDE ""
-set -g ZORUA_AUTO_PROVIDER ""
-set -g _ZORUA_PRE_AUTO_PROVIDER ""
+set -g ZORUA_AUTO_CLAUDE_PROVIDER ""
+set -g _ZORUA_PRE_AUTO_CLAUDE_PROVIDER ""
+set -g ZORUA_AUTO_CODEX_PROVIDER ""
+set -g _ZORUA_PRE_AUTO_CODEX_PROVIDER ""
 set -g ZORUA_PROMPT_KIND ""
 set -g ZORUA_PROMPT_NAME ""
 set -g ZORUA_PROMPT_TEXT ""
@@ -29,7 +31,8 @@ function _zorua_run
     set -l f (mktemp)
     env ZORUA_SHELL=fish ZORUA_EVAL_FILE=$f ZORUA_AUTO_ACTIVE=$ZORUA_AUTO_ACTIVE ZORUA_PRE_AUTO_HOME=$_ZORUA_PRE_AUTO_HOME \
         ZORUA_AUTO_CLAUDE=$ZORUA_AUTO_CLAUDE ZORUA_PRE_AUTO_CLAUDE=$_ZORUA_PRE_AUTO_CLAUDE \
-        ZORUA_AUTO_PROVIDER=$ZORUA_AUTO_PROVIDER ZORUA_PRE_AUTO_PROVIDER=$_ZORUA_PRE_AUTO_PROVIDER \
+        ZORUA_AUTO_CLAUDE_PROVIDER=$ZORUA_AUTO_CLAUDE_PROVIDER ZORUA_PRE_AUTO_CLAUDE_PROVIDER=$_ZORUA_PRE_AUTO_CLAUDE_PROVIDER \
+        ZORUA_AUTO_CODEX_PROVIDER=$ZORUA_AUTO_CODEX_PROVIDER ZORUA_PRE_AUTO_CODEX_PROVIDER=$_ZORUA_PRE_AUTO_CODEX_PROVIDER \
         python3 $ZORUA_CORE $argv
     set -l rc $status
     if test -s $f
@@ -43,17 +46,25 @@ function zorua
     _zorua_run $argv
 end
 
-# While a provider is active (zorua use <provider>), plain `claude` runs on it.
+# While a provider is active (zorua use <provider>), plain `claude` / `codex` runs on it.
 function claude
-    if test -n "$ZORUA_PROVIDER"
+    if test -n "$ZORUA_CLAUDE_PROVIDER"
         env ZORUA_SHELL=fish python3 $ZORUA_CORE launch claude $argv
     else
         command claude $argv
     end
 end
 
+function codex
+    if test -n "$ZORUA_CODEX_PROVIDER"
+        env ZORUA_SHELL=fish python3 $ZORUA_CORE launch codex $argv
+    else
+        command codex $argv
+    end
+end
+
 function _zorua_on_pwd --on-variable PWD
-    if test -s $_ZORUA_BINDINGS; or test -n "$ZORUA_AUTO_ACTIVE"; or test -n "$ZORUA_AUTO_CLAUDE"; or test -n "$ZORUA_AUTO_PROVIDER"
+    if test -s $_ZORUA_BINDINGS; or test -n "$ZORUA_AUTO_ACTIVE"; or test -n "$ZORUA_AUTO_CLAUDE"; or test -n "$ZORUA_AUTO_CLAUDE_PROVIDER"; or test -n "$ZORUA_AUTO_CODEX_PROVIDER"
         _zorua_run apply $PWD
     end
 end

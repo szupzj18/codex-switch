@@ -36,7 +36,8 @@ source "$ROOT/zorua.bash"
 out=$(zorua ls)
 contains "$out" "work@example.com" "discovers signed-in home"
 contains "$out" "pro" "plan column"
-contains "$out" "2030-01-02" "expiry column"
+not_contains "$out" "2030-01-02" "expiry hidden by default"
+contains "$(zorua ls --expiry)" "2030-01-02" "expiry column on request"
 not_contains "$out" $'\033' "no colors when piped"
 contains "$(zorua ls -v)" "~/.codex-work" "verbose view"
 not_contains "$out" "Claude Code" "no section headings while only codex accounts exist"
@@ -89,7 +90,7 @@ if zorua rm default 2>/dev/null; then die "default is protected"; fi
 ok "rm / --purge / default protected"
 
 mkdir "$TMP/bin"
-printf '#!/bin/sh\necho "FAKE_HOME=$CODEX_HOME"\necho "ARGS=$*"\n' > "$TMP/bin/codex"; chmod +x "$TMP/bin/codex"
+printf '#!/bin/sh\necho "FAKE_HOME=$CODEX_HOME"\necho "KEY=${ZORUA_CODEX_KEY:-unset}"\necho "ARGS=$*"\n' > "$TMP/bin/codex"; chmod +x "$TMP/bin/codex"
 out=$(PATH="$TMP/bin:$PATH" zorua work hello-world)
 contains "$out" "FAKE_HOME=$HOME/.codex-work" "one-shot home"
 contains "$out" "ARGS=hello-world" "one-shot args"
@@ -288,9 +289,9 @@ ok "setup wizard"
 
 fails() { if "$@" >/dev/null 2>&1; then die "expected failure: $*"; fi; }
 mkdir -p "$HOME/.claude"
-echo '{"env":{"ANTHROPIC_BASE_URL":"http://127.0.0.1:1","ANTHROPIC_AUTH_TOKEN":"PROXY_MANAGED","ANTHROPIC_DEFAULT_SONNET_MODEL":"internal"}}' > "$HOME/.claude/settings.json"
+echo '{"env":{"ANTHROPIC_BASE_URL":"http://127.0.0.1:1","ANTHROPIC_AUTH_TOKEN":"PROXY_MANAGED","ANTHROPIC_DEFAULT_SONNET_MODEL":"internal","CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000"},"permissions":{"deny":["Bash(rm:*)"]}}' > "$HOME/.claude/settings.json"
 out=$(zorua provider add glm --base-url https://api.example.com/anthropic/ --key sk-glm-secret-123456 --model sonnet=glm-4.6)
-contains "$out" "added provider: glm" "provider add"
+contains "$out" "added claude provider: glm" "provider add"
 echo sk-kimi-secret-123456 | zorua provider add kimi --base-url https://kimi.example.com --api-key --model default=k3 >/dev/null
 fails zorua provider add glm --base-url https://x.example.com --key k
 fails zorua provider add ls --base-url https://x.example.com --key k
@@ -301,8 +302,8 @@ out="$(zorua provider ls)$(zorua provider show glm)$(zorua)"
 not_contains "$out" "sk-glm-secret-123456" "keys are masked in ls/show/list"
 contains "$out" "api.example.com" "provider endpoint shown"
 zorua use glm >/dev/null
-[ "$ZORUA_PROVIDER" = glm ] || die "use glm did not set ZORUA_PROVIDER"
-[ "$ZORUA_PROMPT_TEXT" = "[provider:glm]" ] || die "provider marker: $ZORUA_PROMPT_TEXT"
+[ "$ZORUA_CLAUDE_PROVIDER" = glm ] || die "use glm did not set ZORUA_CLAUDE_PROVIDER"
+[ "$ZORUA_PROMPT_TEXT" = "[claude-provider:glm]" ] || die "provider marker: $ZORUA_PROMPT_TEXT"
 out=$(PATH="$TMP/cbin:$PATH" claude hi)
 contains "$out" "TOKEN=sk-glm-secret-123456" "provider key reaches claude"
 contains "$out" "BASE=https://api.example.com/anthropic" "provider base url reaches claude"
@@ -314,20 +315,24 @@ out=$(PATH="$TMP/cbin:$PATH" claude hi)
 contains "$out" '"ANTHROPIC_API_KEY": "sk-kimi-secret-123456"' "api-key style provider"
 contains "$out" '"ANTHROPIC_AUTH_TOKEN": ""' "conflicting token from settings.json is blanked"
 contains "$out" '"ANTHROPIC_DEFAULT_SONNET_MODEL": ""' "conflicting model from settings.json is blanked"
+# only provider-related keys are overridden: the generated settings hold nothing but an env block,
+# and unrelated user variables are neither copied nor blanked
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert list(d)==["env"], list(d)' "$XDG_CONFIG_HOME/zorua/run/kimi.settings.json" || die "generated settings must only contain env"
+not_contains "$(cat "$XDG_CONFIG_HOME/zorua/run/kimi.settings.json")" "MAX_OUTPUT_TOKENS" "unrelated user env is left alone"
 out=$(PATH="$TMP/cbin:$PATH" zorua glm oneshot)
 contains "$out" "ARGS=--settings" "one-shot provider launch"
 contains "$out" "oneshot" "one-shot passes arguments"
 zorua use - >/dev/null
-[ -z "${ZORUA_PROVIDER:-}" ] || die "use - did not clear ZORUA_PROVIDER"
+[ -z "${ZORUA_CLAUDE_PROVIDER:-}" ] || die "use - did not clear ZORUA_CLAUDE_PROVIDER"
 out=$(PATH="$TMP/cbin:$PATH" claude plain)
 not_contains "$out" "--settings" "claude is untouched without a provider"
 mkdir -p "$TMP/pproj"; cd "$TMP/pproj"
 zorua bind glm >/dev/null
-[ "$ZORUA_PROVIDER" = glm ] && [ "$ZORUA_AUTO_PROVIDER" = glm ] || die "provider bind did not apply"
+[ "$ZORUA_CLAUDE_PROVIDER" = glm ] && [ "$ZORUA_AUTO_CLAUDE_PROVIDER" = glm ] || die "provider bind did not apply"
 cd "$TMP"; zorua apply "$PWD"
-[ -z "${ZORUA_PROVIDER:-}" ] || die "leaving the bound directory did not restore"
+[ -z "${ZORUA_CLAUDE_PROVIDER:-}" ] || die "leaving the bound directory did not restore"
 zorua apply "$TMP/pproj"
-[ "$ZORUA_PROVIDER" = glm ] || die "re-entering the bound directory did not switch"
+[ "$ZORUA_CLAUDE_PROVIDER" = glm ] || die "re-entering the bound directory did not switch"
 zorua unbind "$TMP/pproj" >/dev/null
 zorua use glm >/dev/null
 fails zorua provider rm glm
@@ -345,6 +350,9 @@ rows = [
   ("a", "claude", "Super Relay", {"env": {"ANTHROPIC_BASE_URL": "https://relay.example.com", "ANTHROPIC_AUTH_TOKEN": "tok-relay-123456789", "ANTHROPIC_MODEL": "m1"}}),
   ("b", "claude", "Claude Official", {"env": {}}),
   ("c", "claude", "Proxied", {"env": {"ANTHROPIC_BASE_URL": "http://127.0.0.1:15721", "ANTHROPIC_AUTH_TOKEN": "PROXY_MANAGED"}}),
+  ("g", "claude", "DeepSeek", {"env": {"ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic", "ANTHROPIC_AUTH_TOKEN": "tok-dsc-123456789"}}),
+  ("e", "codex", "DeepSeek", {"auth": {"OPENAI_API_KEY": "tok-ds-123456789"}, "config": 'model_provider = "custom"\nmodel = "ds-flash"\n\n[model_providers.custom]\nname = "deepseek"\nbase_url = "https://api.deepseek.com"\nwire_api = "responses"\n'}),
+  ("f", "codex", "OpenAI Official", {"auth": {"OPENAI_API_KEY": None}, "config": ""}),
   ("d", "pi", "pi-only", {"env": {"ANTHROPIC_BASE_URL": "https://pi.example.com", "ANTHROPIC_AUTH_TOKEN": "tok-pi-123456789"}}),
 ]
 for i, (id_, app, name, cfg) in enumerate(rows):
@@ -353,14 +361,56 @@ con.commit()
 PY
 out=$(zorua provider import cc-switch --db "$TMP/ccswitch.db" --dry-run)
 contains "$out" "super-relay" "import lists the custom claude provider"
+contains "$out" "deepseek" "import lists the custom codex provider"
+not_contains "$out" "OpenAI" "official codex entry skipped"
+not_contains "$out" "tok-ds-123456789" "codex import never prints keys"
 not_contains "$out" "Proxied" "proxy-managed entries skipped"
 not_contains "$out" "pi-only" "other apps skipped"
 not_contains "$out" "tok-relay-123456789" "import never prints keys"
 ! zorua provider ls | grep -q super-relay || die "dry run must not write"
 zorua provider import cc-switch --db "$TMP/ccswitch.db" >/dev/null
 contains "$(zorua provider show super-relay)" "ANTHROPIC_MODEL=m1" "imported env is kept"
+contains "$(zorua provider show deepseek-codex)" "model=ds-flash" "imported codex provider is kept (renamed on a name clash)"
+contains "$(zorua provider show deepseek-codex)" "agent=codex" "imported codex agent"
+contains "$(zorua provider show deepseek)" "agent=claude" "the claude provider keeps the plain name"
 out=$(zorua provider import cc-switch --db "$TMP/ccswitch.db")
 contains "$out" "already exists" "import skips existing names"
 ok "providers: import from cc-switch"
+
+# ---- codex providers: one slot per agent ---------------------------------------
+
+echo sk-ds-secret-123456 | zorua provider add ds --codex --base-url https://api.deepseek.com --model deepseek-v4-flash >/dev/null
+fails zorua provider add ds2 --codex --base-url https://x.example.com --key k
+fails zorua provider add ds2 --codex --api-key --base-url https://x.example.com --model m --key k
+out="$(zorua provider ls)$(zorua provider show ds)"
+not_contains "$out" "sk-ds-secret-123456" "codex key masked"
+contains "$out" "codex" "agent column"
+zorua use kimi >/dev/null; zorua use ds >/dev/null
+[ "$ZORUA_CODEX_PROVIDER" = ds ] && [ "$ZORUA_CLAUDE_PROVIDER" = kimi ] || die "claude and codex providers must be independent"
+contains "$ZORUA_PROMPT_TEXT" "codex-provider:ds" "codex provider marker"
+contains "$ZORUA_PROMPT_TEXT" "claude-provider:kimi" "claude provider marker"
+out=$(PATH="$TMP/bin:$PATH" codex exec hi)
+contains "$out" "KEY=sk-ds-secret-123456" "codex key travels in the environment"
+contains "$out" 'model_provider="zorua_ds"' "codex provider selected via -c"
+contains "$out" 'base_url="https://api.deepseek.com"' "codex base url via -c"
+contains "$out" 'model="deepseek-v4-flash"' "codex model via -c"
+not_contains "$(printf %s "$out" | grep '^ARGS=')" "sk-ds-secret" "key must not appear in argv"
+[ "$(printf %s "$out" | grep '^ARGS=' | grep -o -- '-c ' | wc -l | tr -d ' ')" = 3 ] || die "codex provider must override exactly model_provider, model_providers.* and model"
+contains "$out" "ARGS=-c" "codex flags precede the user's arguments"
+out=$(PATH="$TMP/bin:$PATH" zorua ds exec hi)
+contains "$out" 'model_provider="zorua_ds"' "one-shot codex provider"
+zorua use - >/dev/null
+[ -z "${ZORUA_CODEX_PROVIDER:-}" ] && [ -z "${ZORUA_CLAUDE_PROVIDER:-}" ] || die "use - must clear both provider slots"
+out=$(PATH="$TMP/bin:$PATH" codex exec hi)
+not_contains "$out" "model_provider" "codex untouched without a provider"
+not_contains "$out" "KEY=sk-" "no key without a provider"
+mkdir -p "$TMP/cproj"; cd "$TMP/cproj"
+zorua bind ds >/dev/null
+[ "$ZORUA_CODEX_PROVIDER" = ds ] && [ -z "${ZORUA_CLAUDE_PROVIDER:-}" ] || die "codex provider bind should only fill the codex slot"
+cd "$TMP"; zorua apply "$PWD"
+[ -z "${ZORUA_CODEX_PROVIDER:-}" ] || die "leaving the bound directory did not restore the codex slot"
+zorua unbind "$TMP/cproj" >/dev/null
+zorua provider rm ds >/dev/null
+ok "codex providers: independent slot, env key, -c overrides, bind"
 
 echo "All $n bash smoke checks passed."

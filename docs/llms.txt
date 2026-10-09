@@ -12,7 +12,7 @@ Full docs: https://github.com/szupzj18/zorua/blob/main/README.md
 ## What it is (and is not)
 
 - One Python 3.8+ program (`zorua_core.py`, standard library only) plus a thin wrapper per shell (`zorua.zsh`, `.bash`, `.fish`).
-- Isolation is done by setting the `CODEX_HOME` environment variable. There is no global "active account", no daemon, no proxy, and no wrapper around the `codex` binary.
+- Isolation is done by setting the `CODEX_HOME` / `CLAUDE_CONFIG_DIR` environment variables. There is no global "active account", no daemon and no proxy. The shell also gets `claude` and `codex` functions that pass straight through to the real binary unless a provider is active in that shell.
 - It manages the Codex CLI and Claude Code (subscription logins). The Codex desktop app and the VS Code extension do not read CODEX_HOME.
 - Claude Code accounts use Claude Code's own multi-account mechanism: one CLAUDE_CONFIG_DIR per account (settings, history and the login are per directory; on macOS the Keychain entry name is derived from the directory path).
 - It never modifies anything inside an account's home directory.
@@ -34,8 +34,9 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/uni
 
 ## Commands
 
-    zorua                         list accounts: email, plan, subscription expiry
+    zorua                         list accounts (email, plan) and providers (endpoint, masked key, model)
     zorua usage [-v]              same plus live limits (5h/7d windows, reset time); -v = detailed blocks (also: zorua ls -v)
+        --expiry                 also show the Codex subscription end date (or ZORUA_EXPIRY=1); hidden by default because it comes from a cached token and can be stale
     zorua setup                   interactive first-run wizard (adopt existing homes, sign in, add accounts, bind a directory)
     zorua add <name>              create account <name> (home ~/.codex-<name>) and run `codex login`
         --device-auth            headless device-code sign-in
@@ -46,9 +47,16 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/uni
     zorua hook install|remove|status <claude-account> [--dry-run]
                                wrap that account's Claude Code status-line command in a relay that caches rate_limits (5h/7d, claude.ai Pro/Max) to <config dir>/.zorua-usage.json so `zorua usage` can show them; reads no credentials, original command is preserved, settings.json is backed up. If the account has NO status line, install adds a minimal one and requires --yes (or an interactive confirmation) because Claude Code hides most footer keyboard hints while a status line is configured; remove deletes it again. The installed command uses $HOME-relative paths and falls back to the original command if the relay or python3 is missing; `zorua hook status` (no name) lists all Claude accounts and `zorua hook remove --all` restores them all (uninstall.sh --purge does this)
     zorua login <name>            (re)run `codex login` (or `claude auth login`) for one account
-    zorua use <name>              set CODEX_HOME (Codex account) or CLAUDE_CONFIG_DIR (Claude account) for THIS shell only
+    zorua provider add <name> --base-url URL [--key K | --key-env VAR] [--api-key] [--model ROLE=ID]... [--env VAR=VALUE]... [--force]
+                               add a third-party Claude Code provider (Anthropic-compatible). The key is prompted (hidden) if omitted. ROLE is one of default, opus, sonnet, haiku, subagent. --api-key sends the key as ANTHROPIC_API_KEY instead of ANTHROPIC_AUTH_TOKEN
+    zorua provider add <name> --codex --base-url URL --model ID [--wire-api responses] [--key K | --key-env VAR] [--force]
+                               add a third-party Codex provider; exactly one --model is required
+    zorua provider ls | show <name> | rm <name>     list (AGENT column), show (keys masked), remove
+    zorua provider import cc-switch [--dry-run] [--force] [--db PATH]
+                               copy cc-switch's custom Claude and Codex providers that carry their own key; reads its database read-only, skips official logins and entries that point at cc-switch's local proxy
+    zorua use <name>              set CODEX_HOME (Codex account), CLAUDE_CONFIG_DIR (Claude account) or the provider slot of its agent (ZORUA_CLAUDE_PROVIDER / ZORUA_CODEX_PROVIDER) for THIS shell only; one Claude and one Codex provider can be active together
     zorua use -   |  zorua off       clear the switch (back to the default account ~/.codex)
-    zorua <name> [args]           one-shot: run `codex` (or `claude`, for a Claude account) under that account, e.g. zorua work exec "summarize this repo"; for Claude accounts inherited ANTHROPIC_* / CLAUDE_CODE_USE_* / CLAUDE_CODE_OAUTH_TOKEN are removed for the run
+    zorua <name> [args]           one-shot: run `codex` (or `claude`, for a Claude account) under that account or provider, e.g. zorua work exec "summarize this repo"; for Claude accounts inherited ANTHROPIC_* / CLAUDE_CODE_USE_* / CLAUDE_CODE_OAUTH_TOKEN are removed for the run
     zorua bind [name]             bind the current directory (and subdirectories) to an account; auto-switch on cd
     zorua unbind [dir]            remove a binding
     zorua binds                   list bindings
@@ -56,17 +64,17 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/uni
     zorua prompt                  print the prompt marker, e.g. [codex:work] or [codex:work:auto]
     zorua version | zorua help
 
-Account names: letters, digits, `-` and `_`; they must not collide with a command name, and are unique across Codex and Claude accounts. `default` is the built-in Codex account (~/.codex) and cannot be removed.
+Account and provider names: letters, digits, `-` and `_`; they must not collide with a command name, and are unique across Codex accounts, Claude accounts and providers (a provider belongs to exactly one agent). `default` is the built-in Codex account (~/.codex) and cannot be removed.
 
 ## Example output
 
 `zorua usage` groups accounts by agent (headings appear only when both agents have accounts). Colors only on a TTY.
 
      Codex
-       NAME     PLAN    5H           7D           RESET  EXPIRES
-     ● default  pro     –            ▓░░░░░   6%  4d9h   2026-11-02
-       work     promax  –            ░░░░░░   0%  7d     2026-11-07
-       side     team    ░░░░░░   0%  ▓▓░░░░  26%  1d15h  2026-10-17
+       NAME     PLAN    5H           7D           RESET
+     ● default  pro     –            ▓░░░░░   6%  4d9h
+       work     promax  –            ░░░░░░   0%  7d
+       side     team    ░░░░░░   0%  ▓▓░░░░  26%  1d15h
 
      Claude Code
        NAME  PLAN  5H           7D           RESET
@@ -75,7 +83,9 @@ Account names: letters, digits, `-` and `_`; they must not collide with a comman
      ● this shell  ◆ auto-bound directory
      alt: Claude usage as of 3m ago (from its last session)
 
-`●` marks the account active in this shell, `◆` one switched by a directory binding. Codex windows are live (queried now); Claude windows are the last values cached by the status-line relay and show their age.
+Providers are listed after the accounts, one table per agent (for example "Providers (Claude Code)" with NAME, ENDPOINT, KEY, MODELS).
+
+`●` marks the account or provider active in this shell, `◆` one switched by a directory binding. Codex windows are live (queried now); Claude windows are the last values cached by the status-line relay and show their age.
 
 ## Guidance for agents
 
@@ -84,6 +94,8 @@ Account names: letters, digits, `-` and `_`; they must not collide with a comman
   - set the variable directly, which is all `zorua use` does: `CODEX_HOME=~/.codex-work codex exec "..."`, or
   - call the core: `python3 ~/.zorua/zorua_core.py <command>` (read-only commands such as `ls`, `usage`, `binds`, `names`, `prompt` work this way; `use`/`off`/`bind` write shell statements to the file named by $ZORUA_EVAL_FILE, which only the wrapper consumes).
 - `zorua use` changes only the current shell. It will not persist across separate tool calls.
+- Providers are applied by the `claude` / `codex` shell functions, which exist only in interactive shells that sourced the wrapper. A tool that spawns `claude` or `codex` itself does not get the provider. For a non-interactive run use the one-shot form `zorua <provider> ...`, or `ZORUA_CLAUDE_PROVIDER=<name> python3 ~/.zorua/zorua_core.py launch claude ...` (`launch codex` with `ZORUA_CODEX_PROVIDER` for Codex).
+- API keys of providers live in ~/.config/zorua/providers.json (mode 0600). `zorua provider ls|show` mask them; never print the file.
 - `zorua add`, `zorua login` and `zorua setup` open a browser or wait for input (use `--device-auth` or `--no-login` for headless/non-interactive use). `zorua setup` and `zorua rm` prompts take defaults on EOF, so they will not hang on closed stdin.
 - To list account names non-interactively: `python3 ~/.zorua/zorua_core.py names`.
 - Never print or upload `auth.json` contents. `zorua` itself only decodes the email, plan and expiry from the id_token locally.
@@ -92,11 +104,13 @@ Account names: letters, digits, `-` and `_`; they must not collide with a comman
 
     ~/.config/zorua/accounts.tsv   registered accounts: <name>\t<codex home>
     ~/.config/zorua/claude-accounts.tsv  Claude Code accounts: <name>\t<config dir>
-    ~/.config/zorua/bindings.tsv   directory bindings:  <name>\t<absolute path>  (longest-prefix match, per tool)
+    ~/.config/zorua/bindings.tsv   directory bindings:  <name>\t<absolute path>  (longest-prefix match, per tool; accounts and providers)
+    ~/.config/zorua/providers.json Claude Code and Codex providers incl. API keys (mode 0600)
+    ~/.config/zorua/run/<name>.settings.json   generated per launch for Claude providers (mode 0600)
     ~/.codex, ~/.codex-<name>/            per-account Codex homes (auth.json, sessions, config)
     ~/.zorua/                      installed program and wrappers
 
-Environment variables: ZORUA_CONFIG_DIR (registry location), ZORUA_HOME (install dir), NO_COLOR (disable colors), ZORUA_COLOR=always (force colors), ZORUA_AUTO_ACTIVE (internal binding state).
+Environment variables: ZORUA_CONFIG_DIR (registry location), ZORUA_HOME (install dir), NO_COLOR (disable colors), ZORUA_COLOR=always (force colors), ZORUA_EXPIRY=1 (show Codex subscription end dates), ZORUA_CLAUDE_PROVIDER / ZORUA_CODEX_PROVIDER (active provider of each agent, set by Zorua), ZORUA_AUTO_ACTIVE and the other ZORUA_AUTO_* / ZORUA_PRE_AUTO_* variables (internal binding state).
 On first run `default` is seeded and any ~/.codex-* directory that already contains an auth.json is registered automatically.
 
 ## Behavior worth knowing
@@ -105,6 +119,8 @@ On first run `default` is seeded and any ~/.codex-* directory that already conta
 - Prompt marker: zsh shows it in the right prompt automatically; in bash and fish it is exposed as $ZORUA_PROMPT_TEXT.
 - Output is plain text (no colors) when not a TTY.
 - `zorua usage` sends each account's own access token to https://chatgpt.com/backend-api/wham/usage (the endpoint Codex itself uses) and nowhere else. If it fails it prints the reason, e.g. "token expired (run codex once to refresh)" or "network error: ... (check proxy)".
-- The EXPIRES column comes from the cached sign-in token and can be stale after a renewal (marked with a warning sign); the live limits are authoritative.
+- The Codex subscription end date comes from the cached sign-in token and can be stale after a renewal, so it is hidden unless you pass `--expiry` (or set ZORUA_EXPIRY=1); the live limits are authoritative.
+- Providers: Claude Code is started as `claude --settings <private file>` because a plain ANTHROPIC_BASE_URL in the shell loses to the `env` block of ~/.claude/settings.json while --settings outranks it; ~/.claude/settings.json is never written. Variables that settings.json sets and the provider does not (ANTHROPIC_*, CLAUDE_CODE_SUBAGENT_MODEL, ...) are blanked. Codex is started as `codex -c model_provider=... -c model_providers.<id>=... -c model=...` with the key in the ZORUA_CODEX_KEY environment variable; config.toml is never written. Keys do not appear in `ps`.
+- Only provider settings are overridden. Skills, plugins, MCP servers, hooks, permissions, CLAUDE.md / AGENTS.md, reasoning effort and all other settings behave as without a provider (verified against the real claude and codex); unrelated variables in settings.json such as CLAUDE_CODE_MAX_OUTPUT_TOKENS are left as the user set them (override with `provider add --env`).
 - Claude Code accounts: account and plan come from `claude auth status`. Usage windows come from the status-line relay cache (see `zorua hook`), shown with their age; they only exist after the account has been used once with the relay installed. `zorua use` on a Claude account warns if ANTHROPIC_AUTH_TOKEN, ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, CLAUDE_CODE_USE_* or ANTHROPIC_BASE_URL is set, because they outrank or redirect the subscription login. Console sign-ins without an API key are stored outside the config directory and are not isolated.
-- Not supported: API-key login, importing a token or auth.json with a single command, third-party Claude providers, Windows.
+- Not supported: API-key login for the official services, importing a token or auth.json with a single command, a local proxy, failover or per-request cost tracking for providers, Windows.
