@@ -389,7 +389,31 @@ def apply_binding(st, pwd):
 TITLES = {"codex": "Codex", "claude": "Claude Code"}
 
 
-def render(online, verbose, expiry=False):
+def emit_json(all_acc, info, live, claude_age):
+    """Machine-readable ls / usage for other front ends. Never includes tokens or provider keys."""
+    accounts = []
+    for n, h, k in all_acc:
+        i = info[n]
+        u = {"windows": [], "error": None, "age_seconds": claude_age.get(n)}
+        if n in live:
+            data, e = live[n]
+            u["error"] = e
+            rl = (data or {}).get("rate_limit") or {}
+            for key in ("primary_window", "secondary_window"):
+                w = rl.get(key)
+                if isinstance(w, dict):
+                    u["windows"].append({"window_seconds": w.get("limit_window_seconds"),
+                                         "used_percent": w.get("used_percent"),
+                                         "reset_after_seconds": w.get("reset_after_seconds")})
+        accounts.append({"name": n, "agent": k, "home": h, "state": i["state"],
+                         "email": i["email"], "plan": i["plan"], "until": i["until"], "usage": u})
+    providers = [{"name": n, "agent": zp.agent(p), "endpoint": zp.endpoint(p), "models": zp.models(p)}
+                 for n, p in zp.load(CONFIG_DIR).items()]
+    print(json.dumps({"version": VERSION, "generated_at": int(time.time()),
+                      "accounts": accounts, "providers": providers}, ensure_ascii=False, indent=2))
+
+
+def render(online, verbose, expiry=False, as_json=False):
     # The subscription end date is read from the cached sign-in token, which can be stale, so it
     # is only shown on request: --expiry, or ZORUA_EXPIRY=1.
     show_exp = expiry or os.environ.get("ZORUA_EXPIRY") == "1"
@@ -491,6 +515,10 @@ def render(online, verbose, expiry=False):
             claude_age[n] = (int(now - c["updated_at"]) if c.get("updated_at") else None) if c else None
             if ws:
                 live[n] = ({"rate_limit": {"primary_window": ws[0], "secondary_window": ws[1] if len(ws) > 1 else None}}, None)
+
+    if as_json:
+        emit_json(all_acc, info, live, claude_age)
+        return
 
     def ago(secs):
         return "%dm" % (secs // 60) if secs < 3600 else "%dh%dm" % (secs // 3600, secs % 3600 // 60) if secs < 86400 else "%dd" % (secs // 86400)
@@ -727,7 +755,7 @@ def account_email(home):
 # --------------------------------------------------------------------------
 
 def cmd_ls(args, usage=False):
-    online, verbose, expiry = usage, False, False
+    online, verbose, expiry, as_json = usage, False, False, False
     for a in args:
         if a in ("-u", "--usage"):
             online = True
@@ -735,10 +763,12 @@ def cmd_ls(args, usage=False):
             verbose = True
         elif a == "--expiry":
             expiry = True
+        elif a == "--json":
+            as_json = True
         else:
-            err("zorua ls: unknown option %s (use -v, --expiry)" % a)
+            err("zorua ls: unknown option %s (use -v, --expiry, --json)" % a)
             return 1
-    render(online, verbose, expiry)
+    render(online, verbose, expiry, as_json)
     return 0
 
 
