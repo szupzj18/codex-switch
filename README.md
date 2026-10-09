@@ -68,7 +68,7 @@ Open a new terminal and run `zorua setup` (or `zorua help`).
 
 The installer copies the program to `~/.zorua` and adds one `source` block for each
 shell it finds: `~/.zshrc`, `~/.bashrc` and `~/.config/fish/conf.d/zorua.fish`.
-Pin a release with `ZORUA_REF`, for example `… | ZORUA_REF=v0.6.0 sh`. Every
+Pin a release with `ZORUA_REF`, for example `… | ZORUA_REF=v0.7.0 sh`. Every
 [release](https://github.com/szupzj18/zorua/releases) also ships a tarball
 (`zorua-<version>.tar.gz`) and a `SHA256SUMS` file.
 
@@ -390,7 +390,7 @@ CI (`.github/workflows/smoke.yml`) runs every suite on each push and pull reques
 3.8 and 3.12).
 
 **Releasing.** Pushing a tag publishes a release through `.github/workflows/release.yml`:
-bump `VERSION` in `zorua_core.py` and merge it, then `git tag v0.6.0 && git push origin v0.6.0`
+bump `VERSION` in `zorua_core.py` and merge it, then `git tag v0.7.0 && git push origin v0.7.0`
 (a suffix such as `-rc1` makes it a pre-release). The workflow runs the full test suite,
 fails if the tag does not match `VERSION`, builds the tarball and `SHA256SUMS`, checks that
 the tarball installs and reports the right version, and creates the GitHub Release with
