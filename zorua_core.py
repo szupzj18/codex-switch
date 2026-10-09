@@ -1321,6 +1321,23 @@ def provider_put(args):
     return 0
 
 
+def provider_check(args):
+    """Is the endpoint reachable and the key accepted? --json prints the result and exits 0 (for front ends)."""
+    names = [a for a in args if not a.startswith("-")]
+    provs = zp.load(CONFIG_DIR)
+    if len(names) != 1 or names[0] not in provs or set(args) - set(names) - {"--json"}:
+        err("usage: zorua provider check <name> [--json]   (providers: %s)" % (" ".join(provs) or "none"))
+        return 1
+    res = zp.check(provs[names[0]])
+    res["checked_at"] = int(time.time())
+    if "--json" in args:
+        print(json.dumps(res, ensure_ascii=False))
+        return 0
+    print("%s  %s  %dms  via %s%s" % (res["status"], res["detail"], res["ms"], res["via"],
+                                     "" if res["http"] is None else "  (HTTP %d)" % res["http"]))
+    return 1 if res["status"] == "fail" else 0
+
+
 def provider_models(args):
     provs = zp.load(CONFIG_DIR)
     name = args[0] if args else ""
@@ -1440,6 +1457,8 @@ def cmd_provider(args):
         return provider_rm(rest)
     if sub == "show":
         return provider_show(rest)
+    if sub == "check":
+        return provider_check(rest)
     if sub == "get":
         return provider_get(rest)
     if sub == "put":
@@ -1448,7 +1467,7 @@ def cmd_provider(args):
         return provider_models(rest)
     if sub == "import":
         return provider_import(rest)
-    err("usage: zorua provider [ls | add <name> --base-url URL ... | show <name> | get <name> | put <name> | rm <name> | models <name> ... | import cc-switch]")
+    err("usage: zorua provider [ls | add <name> --base-url URL ... | show <name> | get <name> | put <name> | check <name> | rm <name> | models <name> ... | import cc-switch]")
     return 1
 
 

@@ -431,8 +431,14 @@ echo sk-g-secret-123456 | zorua provider add fetx --codex --base-url "http://127
 contains "$(zorua provider models fetx fetch)" "offers 3 model(s)" "codex fetch uses /models"
 zorua provider add bad --base-url "http://127.0.0.1:1" --key k --model default=x >/dev/null
 fails zorua provider models bad fetch
+contains "$(zorua provider check fet)" "key accepted" "provider check: reachable endpoint"
+contains "$(zorua provider check fet --json)" '"status": "ok"' "provider check --json"
+contains "$(zorua provider check fetx --json)" '"status": "ok"' "provider check: codex provider"
+contains "$(zorua provider check bad --json)" '"status": "fail"' "provider check --json reports failure and exits 0"
+fails zorua provider check bad
+fails zorua provider check nope
 kill $SRV 2>/dev/null; wait $SRV 2>/dev/null || true
-ok "provider models: catalog, pick per shell, fetch"
+ok "provider models: catalog, pick per shell, fetch, check"
 
 # ---- 9. version --------------------------------------------------------------
 
