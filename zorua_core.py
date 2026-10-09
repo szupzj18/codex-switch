@@ -21,6 +21,9 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))   # sibling module, also under python3 -I
+import zorua_providers as zp  # noqa: E402
+
 VERSION = "0.5.0"
 HOME = os.path.expanduser("~")
 # CX_* are the pre-rename names of the user-facing variables; still honoured.
@@ -30,7 +33,7 @@ ACCOUNT_FILE = os.path.join(CONFIG_DIR, "accounts.tsv")
 BINDING_FILE = os.path.join(CONFIG_DIR, "bindings.tsv")
 CLAUDE_FILE = os.path.join(CONFIG_DIR, "claude-accounts.tsv")
 SHELL = os.environ.get("ZORUA_SHELL", "zsh")
-RESERVED = {"ls", "list", "status", "usage", "setup", "use", "login", "off", "reset",
+RESERVED = {"provider", "launch", "ls", "list", "status", "usage", "setup", "use", "login", "off", "reset",
             "unset", "help", "add", "rm", "bind", "unbind", "binds", "version",
             "prompt", "apply", "names", "hook", "-h", "--help", "-v", "--version"}
 
@@ -167,6 +170,8 @@ def claude_accounts():
 
 
 def registry(kind):
+    if kind == "provider":
+        return {n: n for n in zp.load(CONFIG_DIR)}
     return dict(claude_accounts() if kind == "claude" else accounts())
 
 
@@ -175,7 +180,13 @@ def kind_of(name):
         return "codex"
     if name in dict(claude_accounts()):
         return "claude"
+    if name in zp.load(CONFIG_DIR):
+        return "provider"
     return None
+
+
+def all_names():
+    return [n for n, _, _ in all_accounts()] + list(zp.load(CONFIG_DIR))
 
 
 def all_accounts():
@@ -183,11 +194,14 @@ def all_accounts():
     return [(n, h, "codex") for n, h in accounts()] + [(n, h, "claude") for n, h in claude_accounts()]
 
 
-VARS = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR"}
+# For "provider" the "home" is the provider name itself (read by the `claude` shell function).
+VARS = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR", "provider": "ZORUA_PROVIDER"}
+KINDS = tuple(VARS)
 # kind -> (env var the wrapper passes in, shell variable we set, env var for the pre-auto home, shell var for it)
 AUTO_VARS = {
     "codex": ("ZORUA_AUTO_ACTIVE", "ZORUA_AUTO_ACTIVE", "ZORUA_PRE_AUTO_HOME", "_ZORUA_PRE_AUTO_HOME"),
     "claude": ("ZORUA_AUTO_CLAUDE", "ZORUA_AUTO_CLAUDE", "ZORUA_PRE_AUTO_CLAUDE", "_ZORUA_PRE_AUTO_CLAUDE"),
+    "provider": ("ZORUA_AUTO_PROVIDER", "ZORUA_AUTO_PROVIDER", "ZORUA_PRE_AUTO_PROVIDER", "_ZORUA_PRE_AUTO_PROVIDER"),
 }
 
 # Variables that outrank (or redirect) a Claude subscription login. See
@@ -299,7 +313,7 @@ class State:
     def prompt_info(self):
         """-> (kind, name, text): kind is ''|manual|auto|custom."""
         parts, kinds, first = [], set(), ""
-        for kind in ("codex", "claude"):
+        for kind in KINDS:
             home = self.home[kind]
             if not home:
                 continue
@@ -327,7 +341,7 @@ class State:
 
 
 def apply_binding(st, pwd):
-    for kind in ("codex", "claude"):
+    for kind in KINDS:
         bound = binding_for(pwd, kind)
         target = registry(kind).get(bound) if bound else None
         if bound and target:
@@ -588,9 +602,21 @@ def render(online, verbose):
                 rows.append(row + ([(exp, ecode)] if has_exp else []))
             table(rows, head(*(["  NAME", "ACCOUNT", "PLAN"] + (["EXPIRES"] if has_exp else []))))
 
+    provs = zp.load(CONFIG_DIR)
+    pcur, pauto = os.environ.get("ZORUA_PROVIDER", ""), os.environ.get("ZORUA_AUTO_PROVIDER", "")
+    if provs:
+        if groups:
+            print()
+        print(" " + paint("1", "Providers (claude)"))
+        prows = []
+        for n, p in sorted(provs.items()):
+            kv = zp.key_var(p["env"])
+            prows.append([(("● " if n == pcur else "◆ " if n == pauto else "  ") + n, None),
+                          (zp.host(p["env"]), None), (zp.mask(p["env"][kv]) if kv else "-", "2")])
+        table(prows, head("  NAME", "ENDPOINT", "KEY"))
     print()
     notes = []
-    if any(is_cur(n) or is_auto(n) for n, _ in accts):
+    if any(is_cur(n) or is_auto(n) for n, _ in accts) or pcur in provs or pauto in provs:
         notes.append("● this shell  ◆ auto-bound directory")
     if online and has_claude:
         for n, _ in accts:
@@ -692,17 +718,22 @@ def claude_override_warning(home):
 def cmd_use(args, st):
     name = args[0] if args else ""
     if not name or name == "-":
-        st.set_home("codex", "")
-        st.set_home("claude", "")
-        print("codex account: default (%s/.codex); claude: cleared" % HOME)
+        for k in KINDS:
+            st.set_home(k, "")
+        print("codex account: default (%s/.codex); claude and provider: cleared" % HOME)
         st.prompt()
         return 0
     kind = kind_of(name)
     if kind is None:
-        names = [n for n, _, _ in all_accounts()]
+        names = all_names()
         err("zorua: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
         return 1
     home = registry(kind)[name]
+    if kind == "provider":
+        st.set_home("provider", name)
+        print("this shell -> claude provider: %s (%s); plain 'claude' in this shell now uses it" % (name, zp.host(zp.load(CONFIG_DIR)[name]["env"])))
+        st.prompt()
+        return 0
     if not os.path.isdir(home):
         err("zorua: directory not found: %s" % home)
         return 1
@@ -717,10 +748,10 @@ def cmd_use(args, st):
 
 
 def cmd_off(st):
-    st.set_home("codex", "")
-    st.set_home("claude", "")
+    for k in KINDS:
+        st.set_home(k, "")
     st.prompt()
-    print("cleared CODEX_HOME and CLAUDE_CONFIG_DIR; back to default accounts")
+    print("cleared CODEX_HOME, CLAUDE_CONFIG_DIR and ZORUA_PROVIDER; back to defaults")
     return 0
 
 
@@ -733,11 +764,14 @@ def run_claude_login(home):
 
 
 def cmd_login(args):
-    names = [n for n, _, _ in all_accounts()]
+    names = all_names()
     if not args or kind_of(args[0]) is None:
         err("zorua: usage: zorua login <%s>" % "/".join(names))
         return 1
     kind = kind_of(args[0])
+    if kind == "provider":
+        err("zorua: '%s' is a provider (API key); it has no login" % args[0])
+        return 1
     home = registry(kind)[args[0]]
     return run_claude_login(home) if kind == "claude" else run_codex_login(home)
 
@@ -825,9 +859,11 @@ def cmd_rm(args):
         return 1
     kind = kind_of(name)
     if kind is None:
-        names = [n for n, _, _ in all_accounts()]
+        names = all_names()
         err("zorua: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
         return 1
+    if kind == "provider":
+        return provider_rm([name])
     home = registry(kind)[name]
     if home == os.environ.get(VARS[kind], ""):
         err("zorua: '%s' is active in this shell; run 'zorua use -' first" % name)
@@ -852,17 +888,17 @@ def cmd_bind(args, st):
     name = args[0] if args else ""
     d = cwd()
     if not name:
-        active = [k for k in ("codex", "claude") if st.home[k]]
+        active = [k for k in KINDS if st.home[k]]
         if not active:
             err("zorua: currently on default; use 'zorua bind <name>' or 'zorua use <name>' first")
             return 1
         if len(active) > 1:
-            err("zorua: both a codex and a claude account are active; name one: zorua bind <name>")
+            err("zorua: more than one account/provider is active; name one: zorua bind <name>")
             return 1
         name = current_account(active[0])
     kind = kind_of(name)
     if kind is None:
-        names = [n for n, _, _ in all_accounts()]
+        names = all_names()
         err("zorua: unknown account '%s' (accounts: %s)" % (name, " ".join(names)))
         return 1
     rows, existed = [], False
@@ -898,17 +934,234 @@ def cmd_unbind(args, st):
     return 0
 
 
+# --------------------------------------------------------------------------
+# Providers (third-party Claude Code endpoints; logic in zorua_providers.py)
+# --------------------------------------------------------------------------
+
+def launch_claude(name, args):
+    """Replace this process with claude running on provider `name`."""
+    prov = zp.load(CONFIG_DIR).get(name) if name else None
+    if prov is None:
+        if name:
+            err("zorua: provider '%s' not found; running plain claude" % name)
+        penv, extra = dict(os.environ), []
+    else:
+        penv = zp.process_env(os.environ, prov["env"])
+        extra = ["--settings", zp.write_settings(CONFIG_DIR, name, zp.settings_for(os.environ, prov["env"]))]
+    EMIT.flush()
+    try:
+        os.execvpe("claude", ["claude"] + extra + list(args), penv)
+    except FileNotFoundError:
+        err("zorua: claude not found on PATH")
+        return 127
+
+
+def read_key(flag_key, key_env):
+    if flag_key:
+        return flag_key
+    if key_env:
+        return os.environ.get(key_env, "")
+    if sys.stdin.isatty():
+        import getpass
+        return getpass.getpass("API key (input hidden): ").strip()
+    return sys.stdin.readline().strip()
+
+
+def provider_add(args):
+    name, url, key, key_env, api_key, force, models, extra = "", "", "", "", False, False, [], []
+    flags = {"--base-url": "url", "--key": "key", "--key-env": "key_env", "--model": "model", "--env": "env"}
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in flags:
+            if i + 1 >= len(args):
+                err("zorua provider add: %s needs a value" % a)
+                return 1
+            v = args[i + 1]
+            if flags[a] == "url":
+                url = v
+            elif flags[a] == "key":
+                key = v
+            elif flags[a] == "key_env":
+                key_env = v
+            elif flags[a] == "model":
+                models.append(v)
+            else:
+                extra.append(v)
+            i += 2
+            continue
+        if a == "--api-key":
+            api_key = True
+        elif a == "--force":
+            force = True
+        elif a.startswith("-"):
+            err("zorua provider add: unknown flag %s" % a)
+            return 1
+        elif not name:
+            name = a
+        else:
+            err("zorua provider add: unexpected argument %s" % a)
+            return 1
+        i += 1
+    if not name or not url:
+        err("usage: zorua provider add <name> --base-url URL [--key KEY | --key-env VAR] [--api-key]\n"
+            "                          [--model ROLE=ID]... [--env VAR=VALUE]... [--force]\n"
+            "       ROLE: %s" % ", ".join(zp.MODEL_VARS))
+        return 1
+    if not valid_name(name):
+        err("zorua: name must match [A-Za-z0-9_-] and not collide with a command: %s" % name)
+        return 1
+    existing = kind_of(name)
+    if existing and not (existing == "provider" and force):
+        err("zorua: '%s' already exists (%s)%s" % (name, existing, "; use --force to replace" if existing == "provider" else ""))
+        return 1
+    if not url.startswith(("http://", "https://")):
+        err("zorua: --base-url must start with http:// or https://")
+        return 1
+    key = read_key(key, key_env)
+    if not key:
+        err("zorua: no API key given")
+        return 1
+    try:
+        env = zp.build_env(url, key, api_key, models, extra)
+    except ValueError as e:
+        err("zorua provider add: %s" % e)
+        return 1
+    provs = zp.load(CONFIG_DIR)
+    provs[name] = {"env": env}
+    zp.save(CONFIG_DIR, provs)
+    print("added provider: %s -> %s  (zorua use %s, or: zorua %s)" % (name, zp.host(env), name, name))
+    return 0
+
+
+def provider_rm(args):
+    name = args[0] if args else ""
+    provs = zp.load(CONFIG_DIR)
+    if name not in provs:
+        err("zorua: unknown provider '%s' (providers: %s)" % (name, " ".join(provs) or "none"))
+        return 1
+    if os.environ.get("ZORUA_PROVIDER") == name:
+        err("zorua: '%s' is active in this shell; run 'zorua use -' first" % name)
+        return 1
+    del provs[name]
+    zp.save(CONFIG_DIR, provs)
+    if os.path.exists(BINDING_FILE):
+        write_tsv(BINDING_FILE, [(n, p) for n, p in read_tsv(BINDING_FILE) if n != name])
+    try:
+        os.remove(os.path.join(CONFIG_DIR, "run", "%s.settings.json" % name))
+    except OSError:
+        pass
+    print("removed provider: %s" % name)
+    return 0
+
+
+def provider_ls():
+    provs = zp.load(CONFIG_DIR)
+    if not provs:
+        print("(no providers yet — zorua provider add <name> --base-url URL, or: zorua provider import cc-switch)")
+        return 0
+    cur = os.environ.get("ZORUA_PROVIDER", "")
+    auto = os.environ.get("ZORUA_AUTO_PROVIDER", "")
+    print("  %-14s %-34s %-10s %s" % ("NAME", "ENDPOINT", "KEY", "MODELS"))
+    for n, p in sorted(provs.items()):
+        env = p["env"]
+        kv = zp.key_var(env)
+        models = ",".join(r for r, v in zp.MODEL_VARS.items() if v in env)
+        print("%s %-14s %-34s %-10s %s" % ("●" if n == cur else "◆" if n == auto else " ", n, zp.host(env),
+                                          zp.mask(env[kv]) if kv else "-", models or "-"))
+    return 0
+
+
+def provider_show(args):
+    provs = zp.load(CONFIG_DIR)
+    name = args[0] if args else ""
+    if name not in provs:
+        err("zorua: unknown provider '%s' (providers: %s)" % (name, " ".join(provs) or "none"))
+        return 1
+    for var, val in sorted(provs[name]["env"].items()):
+        print("%s=%s" % (var, zp.shown(var, val)))
+    return 0
+
+
+def provider_import(args):
+    if not args or args[0] != "cc-switch":
+        err("usage: zorua provider import cc-switch [--dry-run] [--force] [--db PATH]")
+        return 1
+    dry, force, db = False, False, os.path.join(HOME, ".cc-switch", "cc-switch.db")
+    rest = args[1:]
+    i = 0
+    while i < len(rest):
+        if rest[i] == "--dry-run":
+            dry = True
+        elif rest[i] == "--force":
+            force = True
+        elif rest[i] == "--db" and i + 1 < len(rest):
+            db = rest[i + 1]
+            i += 1
+        else:
+            err("zorua provider import: unknown argument %s" % rest[i])
+            return 1
+        i += 1
+    if not os.path.exists(db):
+        err("zorua: cc-switch database not found: %s" % db)
+        return 1
+    try:
+        found = zp.cc_switch_providers(db)
+    except Exception as e:
+        err("zorua: cannot read %s: %s" % (db, e))
+        return 1
+    provs = zp.load(CONFIG_DIR)
+    added = 0
+    for display, env in found:
+        name = zp.sanitize_name(display)
+        if not valid_name(name):
+            name += "-provider"
+        taken = kind_of(name)
+        if taken and not (taken == "provider" and force):
+            print("skip   %-14s already exists (%s)%s" % (name, taken, "; --force to replace" if taken == "provider" else ""))
+            continue
+        kv = zp.key_var(env)
+        print("%-6s %-14s %s  %s" % ("would" if dry else "import", name, zp.host(env), zp.mask(env[kv])))
+        if not dry:
+            provs[name] = {"env": env}
+            added += 1
+    if added:
+        zp.save(CONFIG_DIR, provs)
+    if not found:
+        print("no custom Claude providers with their own key found in cc-switch")
+    elif not dry:
+        print("imported %d provider(s); cc-switch was only read, nothing in it changed" % added)
+    return 0
+
+
+def cmd_provider(args):
+    sub = args[0] if args else "ls"
+    rest = args[1:]
+    if sub in ("ls", "list"):
+        return provider_ls()
+    if sub == "add":
+        return provider_add(rest)
+    if sub in ("rm", "remove"):
+        return provider_rm(rest)
+    if sub == "show":
+        return provider_show(rest)
+    if sub == "import":
+        return provider_import(rest)
+    err("usage: zorua provider [ls | add <name> --base-url URL ... | show <name> | rm <name> | import cc-switch]")
+    return 1
+
+
 def cmd_binds():
     rows = read_tsv(BINDING_FILE)
     if not rows:
         print("(no project bindings yet — run 'zorua bind <name>' inside a project directory)")
         return 0
     pwd = cwd()
-    here = {binding_for(pwd, k) for k in ("codex", "claude")} - {""}
+    here = {binding_for(pwd, k) for k in KINDS} - {""}
     print(" account       project directory (* active here)")
     for n, p in rows:
         active = n in here and (pwd == p or pwd.startswith(p.rstrip("/") + "/"))
-        tag = "  (claude)" if kind_of(n) == "claude" else ""
+        tag = {"claude": "  (claude)", "provider": "  (provider)"}.get(kind_of(n), "")
         print(" %s%-12s %s%s" % ("* " if active else "  ", n, p, tag))
     return 0
 
@@ -1121,6 +1374,14 @@ HELP = """  zorua                         list accounts, emails, plan and subscr
   zorua add --claude <name>     create a Claude Code subscription account (own
                                 CLAUDE_CONFIG_DIR ~/.claude-<name>; sign-in via claude auth login)
   zorua rm <name> [--purge]     unregister (keeps data unless confirmed/--purge)
+  zorua provider add <name> --base-url URL [--key K | --key-env VAR] [--api-key]
+                                [--model ROLE=ID]... [--env VAR=VALUE]...
+                                add a third-party Claude Code endpoint (key is prompted if omitted)
+  zorua provider ls|show|rm     list / show (keys masked) / remove providers
+  zorua provider import cc-switch [--dry-run] [--force]
+                                copy custom Claude providers out of cc-switch (read-only)
+  zorua use <provider>          this shell's plain `claude` runs on the provider; also usable as
+                                zorua <provider> [args] and with zorua bind
   zorua bind [name]             bind current directory (default: current account)
   zorua unbind [dir]            remove a directory binding (default: current dir)
   zorua binds                   list project bindings
@@ -1240,14 +1501,23 @@ def main(argv):
         rc = cmd_help()
     elif sub == "hook":
         rc = cmd_hook(rest)
+    elif sub == "provider":
+        rc = cmd_provider(rest)
+    elif sub == "launch":
+        if not rest or rest[0] != "claude":
+            err("usage: zorua launch claude [args]   (used by the claude shell function)")
+            return 1
+        return launch_claude(os.environ.get("ZORUA_PROVIDER", ""), rest[1:])
     elif sub == "prompt":
         print(st.prompt_info()[2])
     elif sub == "apply":
         apply_binding(st, rest[0] if rest else cwd())
     elif sub == "names":
-        print("\n".join(n for n, _, _ in all_accounts()))
+        print("\n".join(all_names()))
     else:
         kind = kind_of(sub)
+        if kind == "provider":
+            return launch_claude(sub, rest)
         if kind:
             home = registry(kind)[sub]
             EMIT.flush()

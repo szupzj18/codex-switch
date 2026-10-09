@@ -102,5 +102,49 @@ zorua rm alt --purge >/dev/null
 set -gx PATH $oldpath
 ok "claude accounts"
 
+# ---- providers ----------------------------------------------------------------
+mkdir -p $HOME/.claude
+echo '{"env":{"ANTHROPIC_BASE_URL":"http://127.0.0.1:1","ANTHROPIC_AUTH_TOKEN":"PROXY_MANAGED","ANTHROPIC_DEFAULT_SONNET_MODEL":"internal"}}' > $HOME/.claude/settings.json
+set -gx PATH $tmp/cbin $PATH
+zorua provider add glm --base-url https://api.example.com/anthropic/ --key sk-glm-secret-123456 --model sonnet=glm-4.6 >/dev/null; or die "provider add failed"
+echo sk-kimi-secret-123456 | zorua provider add kimi --base-url https://kimi.example.com --api-key --model default=k3 >/dev/null; or die "provider add (stdin key) failed"
+zorua provider add glm --base-url https://x.example.com --key k 2>/dev/null; and die "duplicate provider should fail"
+zorua provider add ls --base-url https://x.example.com --key k 2>/dev/null; and die "reserved name should fail"
+set -l listing (begin; zorua provider ls; zorua provider show glm; zorua; end | string collect)
+contains_str $listing api.example.com "provider endpoint shown"
+string match -q "*sk-glm-secret-123456*" -- $listing; and die "key leaked in listing"
+zorua use glm >/dev/null
+test "$ZORUA_PROVIDER" = glm; or die "use glm did not set ZORUA_PROVIDER"
+test "$ZORUA_PROMPT_TEXT" = "[provider:glm]"; or die "prompt text: $ZORUA_PROMPT_TEXT"
+set -l pout (claude hi | string collect)
+contains_str $pout "TOKEN=sk-glm-secret-123456" "provider key reaches claude"
+contains_str $pout "BASE=https://api.example.com/anthropic" "provider base url reaches claude"
+contains_str $pout "SETTINGS_PERMS=600" "settings file is private"
+contains_str $pout '"ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.6"' "provider model beats settings.json"
+zorua use kimi >/dev/null
+set pout (claude hi | string collect)
+contains_str $pout '"ANTHROPIC_API_KEY": "sk-kimi-secret-123456"' "api-key style provider"
+contains_str $pout '"ANTHROPIC_AUTH_TOKEN": ""' "conflicting token is blanked"
+zorua use - >/dev/null
+test -z "$ZORUA_PROVIDER"; or die "use - did not clear ZORUA_PROVIDER"
+string match -q "*--settings*" -- (claude plain | string collect); and die "claude must be untouched without a provider"
+mkdir -p $tmp/pproj
+cd $tmp/pproj
+zorua bind glm >/dev/null
+test "$ZORUA_PROVIDER" = glm -a "$ZORUA_AUTO_PROVIDER" = glm; or die "provider bind did not apply"
+cd $tmp
+test -z "$ZORUA_PROVIDER"; or die "leaving the bound directory did not restore"
+cd $tmp/pproj
+test "$ZORUA_PROVIDER" = glm; or die "re-entering the bound directory did not switch"
+zorua unbind $tmp/pproj >/dev/null
+cd $tmp
+zorua use glm >/dev/null
+zorua provider rm glm 2>/dev/null; and die "active provider must not be removable"
+zorua use - >/dev/null
+zorua provider rm glm >/dev/null; or die "provider rm failed"
+string match -q "*glm *" -- (zorua provider ls | string collect); and die "provider rm left the entry"
+set -gx PATH $oldpath
+ok "providers: add, use, claude launch, bind, rm"
+
 rm -rf $tmp
 echo "All $n fish smoke checks passed."
