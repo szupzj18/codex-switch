@@ -394,7 +394,9 @@ def emit_json(all_acc, info, live, claude_age):
     accounts = []
     for n, h, k in all_acc:
         i = info[n]
-        u = {"windows": [], "error": None, "age_seconds": claude_age.get(n)}
+        # relay: is the status-line relay installed (Claude accounts only; None for Codex)
+        u = {"windows": [], "error": None, "age_seconds": claude_age.get(n),
+             "relay": hook_installed(n) if k == "claude" else None}
         if n in live:
             data, e = live[n]
             u["error"] = e
@@ -690,6 +692,8 @@ def render(online, verbose, expiry=False, as_json=False):
                 continue
             if claude_age.get(n) is not None:
                 notes.append("%s: Claude usage as of %s ago (from its last session)" % (n, ago(claude_age[n])))
+            elif hook_installed(n):
+                notes.append("%s: no Claude usage yet — relay is installed; restart claude under this account and send a message" % n)
             else:
                 notes.append("%s: no Claude usage yet — run 'zorua hook install %s', then use claude once" % (n, n))
     if stale[0] and show_exp:

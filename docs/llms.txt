@@ -38,7 +38,7 @@ Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/uni
 
     zorua                         list accounts (email, plan) and providers (endpoint, masked key, model)
     zorua usage [-v]              same plus live limits (5h/7d windows, reset time); -v = detailed blocks (also: zorua ls -v)
-        --json                   machine-readable `zorua ls` / `zorua usage`: {version, generated_at, accounts[{name, agent, home, state, email, plan, until, usage{windows, error, age_seconds}}], providers[{name, agent, endpoint, models}], bindings[{name, dir, kind}]}. Never contains tokens or provider keys
+        --json                   machine-readable `zorua ls` / `zorua usage`: {version, generated_at, accounts[{name, agent, home, state, email, plan, until, usage{windows, error, age_seconds, relay}}], providers[{name, agent, endpoint, models}], bindings[{name, dir, kind}]}. Never contains tokens or provider keys
         --expiry                 also show the Codex subscription end date (or ZORUA_EXPIRY=1); hidden by default because it comes from a cached token and can be stale
     zorua setup                   interactive first-run wizard (adopt existing homes, sign in, add accounts, bind a directory)
     zorua add <name>              create account <name> (home ~/.codex-<name>) and run `codex login`

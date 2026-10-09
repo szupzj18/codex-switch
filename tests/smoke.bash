@@ -216,9 +216,11 @@ contains "$(cat "$U1/settings.json")" "zorua_statusline.py" "relay installed in 
 python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['theme']=='dark' and d['statusLine']['padding']==0, d" "$U1/settings.json" || die "other settings must be preserved"
 contains "$(zorua hook status u1)" "installed" "status"
 contains "$(zorua hook install u1)" "already installed" "idempotent"
+zorua ls --json | python3 -c 'import json,sys;d={a["name"]:a for a in json.load(sys.stdin)["accounts"]};assert d["u1"]["usage"]["relay"] is True and d["work"]["usage"]["relay"] is None, d' || die "ls --json must report relay: true once installed, null for Codex"
 ls "$U1"/settings.json.zorua-bak-* >/dev/null 2>&1 || die "backup missing"
 echo "$JSON" | CLAUDE_CONFIG_DIR="$U1" bash -c "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['statusLine']['command'])" "$U1/settings.json")" | grep -q '^hi$' || die "installed command must still run the original"
 zorua hook remove u1 >/dev/null
+zorua ls --json | python3 -c 'import json,sys;d={a["name"]:a for a in json.load(sys.stdin)["accounts"]};assert d["u1"]["usage"]["relay"] is False, d' || die "ls --json must report relay: false after remove"
 python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['statusLine']['command']=='echo hi', d" "$U1/settings.json" || die "remove must restore the original command"
 if zorua hook install work 2>/dev/null; then die "hook only for claude accounts"; fi
 zorua rm u1 --purge >/dev/null
