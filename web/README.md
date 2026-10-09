@@ -1,9 +1,10 @@
 # Zorua web
 
-A local dashboard for Zorua: accounts, 5h/7d usage, providers and directory bindings, with account management. Next.js and Tailwind CSS.
+A local dashboard for Zorua: accounts, 5h/7d usage, providers and directory bindings, with account management and a provider editor. Next.js and Tailwind CSS.
 It is optional and separate from the Python program; it is not part of the release tarball.
 
-- Data comes from `zorua usage --json` (run by the server, never by the browser). Tokens and provider keys are not in that output and never reach the page.
+- Data comes from `zorua usage --json` (run by the server, never by the browser). Tokens and provider keys are not in that output. A provider key reaches the page only when you press **show keys** in that provider's editor.
+- Layout: a sidebar (overview, accounts, providers) and a content area. The overview shows accounts and providers in two columns; a provider or account opens as a page (`#/provider/<name>`, `#/account/<name>`). Dark by default, light follows the system; the **auto / light / dark** switch in the sidebar overrides it.
 - Results are cached for 30 s and refreshed in the background, so the page opens at once. The refresh button forces a reload (at most one per 5 s).
 
 ## What you can do
@@ -14,6 +15,7 @@ It is optional and separate from the Python program; it is not part of the relea
 | sign in again | `zorua login <name>`: the CLI opens your browser; the page shows the link it printed and the result |
 | remove an account; optionally delete its data directory | `zorua rm <name> [--purge]` |
 | add or remove a provider (key typed once, stored by zorua in its own `providers.json`) | `zorua provider add / rm` |
+| view and edit a provider: every env variable, the key, the model catalog (a masked key is kept as is; **show keys** reads the real one) | `zorua provider get [--reveal]`, `zorua provider put` (keeps `providers.json.bak`) |
 | bind or unbind a directory | `zorua bind <name>` run inside that directory, `zorua unbind <dir>` |
 
 Safety:

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+/* Dark is the default. Light follows the system setting unless the page forces a theme
+   (data-theme on <html>, set by the switch in the sidebar and remembered in localStorage). */
 @theme {
   --color-bg: #0b0d0c;
   --color-panel: #111514;
@@ -9,8 +11,49 @@
   --color-accent: #5eead4;
   --color-warn: #fbbf24;
   --color-violet: #c4b5fd;
+  --color-info: #7dd3fc;
   --color-danger: #fb7185;
+  --color-on-accent: #04110e;
+  --color-on-danger: #1a0508;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #f5f7f6;
+  --color-panel: #ffffff;
+  --color-line: #d8dfdc;
+  --color-fg: #18211e;
+  --color-dim: #5d6a65;
+  --color-accent: #0f766e;
+  --color-warn: #b45309;
+  --color-violet: #6d28d9;
+  --color-info: #0369a1;
+  --color-danger: #be123c;
+  --color-on-accent: #ffffff;
+  --color-on-danger: #ffffff;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --color-bg: #f5f7f6;
+    --color-panel: #ffffff;
+    --color-line: #d8dfdc;
+    --color-fg: #18211e;
+    --color-dim: #5d6a65;
+    --color-accent: #0f766e;
+    --color-warn: #b45309;
+    --color-violet: #6d28d9;
+    --color-info: #0369a1;
+    --color-danger: #be123c;
+    --color-on-accent: #ffffff;
+    --color-on-danger: #ffffff;
+  }
 }
 
 html,

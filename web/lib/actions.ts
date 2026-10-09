@@ -120,6 +120,15 @@ export async function perform(input: unknown): Promise<ActionResult> {
       }
       return { ok: true, message: `added provider ${n}` };
     }
+    case "provider.save": {
+      const n = name(b.name);
+      if (!reg.providers.some((p) => p.name === n)) throw new BadRequest(`unknown provider '${n}'`);
+      if (typeof b.doc !== "object" || b.doc === null || Array.isArray(b.doc)) throw new BadRequest("doc must be an object");
+      const input = JSON.stringify(b.doc);
+      if (input.length > 200_000) throw new BadRequest("document is too large");
+      await run(["provider", "put", n], { input });
+      return { ok: true, message: `saved provider ${n}` };
+    }
     case "provider.remove": {
       const n = name(b.name);
       if (!reg.providers.some((p) => p.name === n)) throw new BadRequest(`unknown provider '${n}'`);
