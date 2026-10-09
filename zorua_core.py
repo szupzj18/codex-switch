@@ -1032,8 +1032,19 @@ def cmd_unbind(args, st):
 # Providers (third-party Claude Code / Codex endpoints; logic in zorua_providers.py)
 # --------------------------------------------------------------------------
 
+def _flush_before_exec():
+    """exec replaces the process without flushing: on Python 3.8 stderr is block-buffered when
+    redirected, so a warning printed just before would be lost."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except (OSError, ValueError):
+            pass
+
+
 def _exec_agent(agent, extra, penv, args):
     EMIT.flush()
+    _flush_before_exec()
     try:
         os.execvpe(agent, [agent] + extra + list(args), penv)
     except FileNotFoundError:
@@ -1745,6 +1756,7 @@ def main(argv):
         if kind:
             home = registry(kind)[sub]
             EMIT.flush()
+            _flush_before_exec()
             if kind == "claude":
                 env, argv = claude_clean_env(home), ["claude"] + rest
             else:
