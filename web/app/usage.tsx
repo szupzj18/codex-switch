@@ -48,6 +48,8 @@ export function usageNote(a: Account): string | null {
   if (a.state !== "ok") return a.state === "apikey" ? "API key login" : a.state === "none" ? "not signed in" : a.state;
   if (a.usage.windows.length === 0) {
     if (a.agent !== "claude") return "no usage data";
+    const hidden = a.usage.shadowed_by?.[0];
+    if (hidden) return `no usage yet — ${hidden.file} has its own status line, which hides the relay in sessions started in ${hidden.dir}. Run 'zorua hook install ${a.name} --shadows'`;
     // Sessions that were already running when the relay was installed never call it.
     return a.usage.relay ? "no usage yet — the relay is installed; restart claude under this account and send a message" : `no usage yet — run 'zorua hook install ${a.name}', then use claude once`;
   }

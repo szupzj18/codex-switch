@@ -396,7 +396,8 @@ def emit_json(all_acc, info, live, claude_age):
         i = info[n]
         # relay: is the status-line relay installed (Claude accounts only; None for Codex)
         u = {"windows": [], "error": None, "age_seconds": claude_age.get(n),
-             "relay": hook_installed(n) if k == "claude" else None}
+             "relay": hook_installed(n) if k == "claude" else None,
+             "shadowed_by": [{"file": s["file"], "dir": s["dir"]} for s in shadow_files(n, False) if not s["relay"]] if k == "claude" else None}
         if n in live:
             data, e = live[n]
             u["error"] = e
@@ -692,6 +693,9 @@ def render(online, verbose, expiry=False, as_json=False):
                 continue
             if claude_age.get(n) is not None:
                 notes.append("%s: Claude usage as of %s ago (from its last session)" % (n, ago(claude_age[n])))
+            elif [s for s in shadow_files(n, False) if not s["relay"]]:
+                s = [s for s in shadow_files(n, False) if not s["relay"]][0]
+                notes.append("%s: no Claude usage yet — %s hides the relay in %s; run 'zorua hook install %s --shadows'" % (n, s["file"], s["dir"], n))
             elif hook_installed(n):
                 notes.append("%s: no Claude usage yet — relay is installed; restart claude under this account and send a message" % n)
             else:
@@ -1541,9 +1545,39 @@ def unwrap_status_command(cmd):
     return None
 
 
-def hook_one(action, name, dry=False, yes=False):
+def shadow_files(name, with_cwd=True):
+    """Project settings that define a status line of their own for Claude account `name`.
+
+    Claude Code gives <dir>/.claude/settings{,.local}.json priority over the account's own
+    settings.json for sessions started in <dir>, so a status line there hides the relay. Looks in
+    $HOME, the current directory and the directories bound to the account. -> [{"file", "dir",
+    "command", "relay"}], where relay says the file already goes through the relay.
+    """
+    home = os.path.realpath(registry("claude")[name])
+    dirs = [HOME] + ([os.getcwd()] if with_cwd else []) + [d for n, d in read_tsv(BINDING_FILE) if n == name]
+    seen, out = set(), []
+    for d in dirs:
+        for fn in ("settings.local.json", "settings.json"):
+            p = os.path.realpath(os.path.join(d, ".claude", fn))
+            if p in seen or os.path.dirname(p) == home:
+                continue
+            seen.add(p)
+            try:
+                with open(p) as f:
+                    sl = json.load(f).get("statusLine")
+            except Exception:
+                continue
+            cmd = (sl.get("command") or "") if isinstance(sl, dict) else ""
+            if cmd.strip():
+                out.append({"file": p, "dir": os.path.dirname(os.path.dirname(p)), "command": cmd,
+                            "relay": unwrap_status_command(cmd) is not None})
+    return out
+
+
+def hook_one(action, name, dry=False, yes=False, path=None):
+    """Install/remove/status the relay in the account's settings.json, or in `path` (a shadowing file)."""
     home = registry("claude")[name]
-    path = os.path.realpath(os.path.join(home, "settings.json"))
+    path = path or os.path.realpath(os.path.join(home, "settings.json"))
     try:
         with open(path) as f:
             settings = json.load(f)
@@ -1565,6 +1599,12 @@ def hook_one(action, name, dry=False, yes=False):
             print("cache:    updated %ds ago" % int(time.time() - cache["updated_at"]))
         else:
             print("cache:    none yet (use claude once with the relay installed)")
+        for s in shadow_files(name):
+            if s["relay"]:
+                print("also in:  %s (sessions started in %s)" % (s["file"], s["dir"]))
+            else:
+                print("SHADOWED: %s defines its own status line, which hides the relay in sessions started in %s" % (s["file"], s["dir"]))
+                print("          fix: zorua hook install %s --shadows   (wraps that status line too; a backup is made)" % name)
         return 0
 
     if action == "install":
@@ -1627,9 +1667,9 @@ def hook_one(action, name, dry=False, yes=False):
 
 def cmd_hook(args):
     """zorua hook install|remove|status [<claude account>|--all] [--dry-run] [--yes]"""
-    usage = "usage: zorua hook install|remove <claude-account> [--dry-run] [--yes] | zorua hook remove --all | zorua hook status [<claude-account>]"
-    dry, yes, every = "--dry-run" in args, "--yes" in args, "--all" in args
-    args = [a for a in args if a not in ("--dry-run", "--yes", "--all")]
+    usage = "usage: zorua hook install|remove <claude-account> [--shadows] [--dry-run] [--yes] | zorua hook remove --all | zorua hook status [<claude-account>]"
+    dry, yes, every, shadows = "--dry-run" in args, "--yes" in args, "--all" in args, "--shadows" in args
+    args = [a for a in args if a not in ("--dry-run", "--yes", "--all", "--shadows")]
     if not args or args[0] not in ("install", "remove", "status", "refresh") or len(args) > 2:
         err(usage)
         return 1
@@ -1669,6 +1709,16 @@ def cmd_hook(args):
             print("not installed")
             continue
         rc = hook_one(action, name, dry, yes) or rc
+        if action in ("install", "remove") and rc == 0:
+            # Status lines in project settings outrank the account's, so the relay must be there too.
+            for s in shadow_files(name):
+                if (action == "install") == (not s["relay"]):
+                    if shadows:
+                        print("[%s: %s]" % (name, s["file"]))
+                        rc = hook_one(action, name, dry, yes, s["file"]) or rc
+                    elif action == "install":
+                        print("warning: %s defines its own status line, which hides the relay in sessions started in %s;"
+                              " run 'zorua hook install %s --shadows' to wrap it too" % (s["file"], s["dir"], name))
     if not targets:
         print("(no Claude accounts)")
     return rc
@@ -1724,7 +1774,9 @@ HELP = """  zorua                         list accounts, emails, plan and subscr
   zorua hook install <claude>   relay Claude Code's status-line rate_limits into a cache so
                                 zorua usage can show 5h/7d (also: hook remove <name>|--all,
                                 hook status [name], hook refresh, --dry-run; an account with no
-                                status line needs --yes or a confirmation)
+                                status line needs --yes or a confirmation). A status line in
+                                <dir>/.claude/settings.json hides the relay in sessions started in
+                                <dir>; hook status says so and --shadows wraps that one too
   zorua prompt                  print the prompt marker (also in $ZORUA_PROMPT_TEXT)
   zorua version                 print Zorua version
 """

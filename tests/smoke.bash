@@ -222,6 +222,21 @@ echo "$JSON" | CLAUDE_CONFIG_DIR="$U1" bash -c "$(python3 -c "import json,sys;pr
 zorua hook remove u1 >/dev/null
 zorua ls --json | python3 -c 'import json,sys;d={a["name"]:a for a in json.load(sys.stdin)["accounts"]};assert d["u1"]["usage"]["relay"] is False, d' || die "ls --json must report relay: false after remove"
 python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['statusLine']['command']=='echo hi', d" "$U1/settings.json" || die "remove must restore the original command"
+# a status line in project settings outranks the account's: status warns, --shadows wraps it
+mkdir -p "$HOME/.claude"
+printf '{"statusLine":{"type":"command","command":"echo shadow"}}' > "$HOME/.claude/settings.json"
+contains "$(zorua hook install u1)" "hides the relay" "install warns about a shadowing status line"
+contains "$(zorua hook status u1)" "SHADOWED" "status reports the shadow"
+zorua ls --json | python3 -c 'import json,sys;d={a["name"]:a for a in json.load(sys.stdin)["accounts"]};s=d["u1"]["usage"]["shadowed_by"];assert len(s)==1 and s[0]["file"].endswith("/.claude/settings.json"), s' || die "ls --json must list shadowed_by"
+contains "$(zorua hook install u1 --shadows --dry-run)" "dry run" "--shadows dry run"
+contains "$(cat "$HOME/.claude/settings.json")" '"echo shadow"' "--shadows dry run must not write"
+zorua hook install u1 --shadows >/dev/null
+contains "$(cat "$HOME/.claude/settings.json")" "zorua_statusline.py" "--shadows wraps the project status line"
+contains "$(zorua hook status u1)" "also in" "status lists the wrapped file"
+not_contains "$(zorua hook status u1)" "SHADOWED" "no longer shadowed once wrapped"
+zorua hook remove u1 --shadows >/dev/null
+python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['statusLine']['command']=='echo shadow', d" "$HOME/.claude/settings.json" || die "remove --shadows must restore the original command"
+rm -f "$HOME/.claude/settings.json" "$HOME"/.claude/settings.json.zorua-bak-*
 if zorua hook install work 2>/dev/null; then die "hook only for claude accounts"; fi
 zorua rm u1 --purge >/dev/null
 

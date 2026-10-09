@@ -143,7 +143,16 @@ zorua hook install alt --dry-run     # preview exactly what changes
 zorua hook install alt               # writes settings.json (a backup is made first)
 zorua hook status                    # which Claude accounts use the relay, cache age
 zorua hook remove alt                # restores the original command (--all for every account)
+zorua hook install alt --shadows     # also wrap a status line that hides the relay (see below)
 ```
+
+- **A status line in project settings hides the relay.** Claude Code gives
+  `<dir>/.claude/settings.json` (and `settings.local.json`) priority over the account's own
+  `settings.json` for sessions started in `<dir>`. If such a file defines a status line, those
+  sessions never run the relay and the account shows no usage. `zorua hook status`, `zorua usage`
+  and the dashboard report it (`SHADOWED`); `zorua hook install alt --shadows` wraps that status
+  line too (a backup is made, `--dry-run` previews) and `hook remove alt --shadows` undoes it.
+  Zorua looks in `$HOME`, the current directory and the directories bound to the account.
 
 - An account **without** a status line gets a minimal one (model, context, 5h/7d). Claude
   Code hides most footer keyboard hints while any status line is configured, so
