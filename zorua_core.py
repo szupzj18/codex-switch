@@ -31,6 +31,7 @@ HOME = os.path.expanduser("~")
 CONFIG_DIR = os.environ.get("ZORUA_CONFIG_DIR") or os.environ.get("CX_CONFIG_DIR") or os.path.join(
     os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "zorua")
 ACCOUNT_FILE = os.path.join(CONFIG_DIR, "accounts.tsv")
+CLAUDE_SETTINGS_TEMPLATE = os.path.join(CONFIG_DIR, "claude-settings.json")
 BINDING_FILE = os.path.join(CONFIG_DIR, "bindings.tsv")
 CLAUDE_FILE = os.path.join(CONFIG_DIR, "claude-accounts.tsv")
 SHELL = os.environ.get("ZORUA_SHELL", "zsh")
@@ -870,6 +871,17 @@ def cmd_login(args):
     return run_claude_login(home) if kind == "claude" else run_codex_login(home)
 
 
+def seed_claude_settings(home):
+    """Give a new Claude account the user's settings template (e.g. proxy env), never overwriting."""
+    dst = os.path.join(home, "settings.json")
+    if os.path.isfile(CLAUDE_SETTINGS_TEMPLATE) and not os.path.exists(dst):
+        with open(CLAUDE_SETTINGS_TEMPLATE) as f:
+            data = f.read()
+        fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(data)
+
+
 def cmd_add(args):
     name, home_override, do_login, device, claude = "", "", True, False, False
     i = 0
@@ -920,6 +932,7 @@ def cmd_add(args):
             return 1
     os.makedirs(home, exist_ok=True)
     if claude:
+        seed_claude_settings(home)
         signed_in = claude_status(home).get("loggedIn")
         if do_login and not signed_in:
             print("Complete the sign-in in your browser (Claude account: %s)..." % name)
@@ -1588,6 +1601,7 @@ HELP = """  zorua                         list accounts, emails, plan and subscr
                                 [--home DIR] [--no-login] [--device-auth]
   zorua add --claude <name>     create a Claude Code subscription account (own
                                 CLAUDE_CONFIG_DIR ~/.claude-<name>; sign-in via claude auth login)
+                                new accounts start from <config dir>/claude-settings.json if present
   zorua rm <name> [--purge]     unregister (keeps data unless confirmed/--purge)
   zorua provider add <name> --base-url URL [--key K | --key-env VAR] [--api-key]
                                 [--model ROLE=ID]... [--env VAR=VALUE]...
