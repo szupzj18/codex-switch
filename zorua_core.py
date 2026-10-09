@@ -1290,6 +1290,37 @@ def provider_show(args):
     return 0
 
 
+def provider_get(args):
+    """JSON view of one provider for front ends; secrets are masked unless --reveal."""
+    names = [a for a in args if not a.startswith("-")]
+    provs = zp.load(CONFIG_DIR)
+    if len(names) != 1 or names[0] not in provs or set(args) - set(names) - {"--reveal"}:
+        err("usage: zorua provider get <name> [--reveal]   (providers: %s)" % (" ".join(provs) or "none"))
+        return 1
+    print(json.dumps(zp.document(provs[names[0]], "--reveal" in args), ensure_ascii=False))
+    return 0
+
+
+def provider_put(args):
+    """Replace one provider with the JSON document on stdin (the shape `provider get` prints)."""
+    provs = zp.load(CONFIG_DIR)
+    name = args[0] if len(args) == 1 else ""
+    if name not in provs:
+        err("usage: zorua provider put <name> < document.json   (providers: %s)" % (" ".join(provs) or "none"))
+        return 1
+    try:
+        doc = json.loads(sys.stdin.read())
+        new = zp.from_document(provs[name], doc)
+    except ValueError as e:
+        err("zorua provider put: %s" % e)
+        return 1
+    zp.backup(CONFIG_DIR)
+    provs[name] = new
+    zp.save(CONFIG_DIR, provs)
+    print("updated provider: %s -> %s" % (name, zp.endpoint(new)))
+    return 0
+
+
 def provider_models(args):
     provs = zp.load(CONFIG_DIR)
     name = args[0] if args else ""
@@ -1409,11 +1440,15 @@ def cmd_provider(args):
         return provider_rm(rest)
     if sub == "show":
         return provider_show(rest)
+    if sub == "get":
+        return provider_get(rest)
+    if sub == "put":
+        return provider_put(rest)
     if sub in ("models", "model"):
         return provider_models(rest)
     if sub == "import":
         return provider_import(rest)
-    err("usage: zorua provider [ls | add <name> --base-url URL ... | show <name> | rm <name> | models <name> ... | import cc-switch]")
+    err("usage: zorua provider [ls | add <name> --base-url URL ... | show <name> | get <name> | put <name> | rm <name> | models <name> ... | import cc-switch]")
     return 1
 
 

@@ -177,7 +177,8 @@ def fetch_models(p, timeout=15):
 
 
 def is_secret(var):
-    return any(m in var.upper() for m in SECRET_MARKS)
+    u = var.upper()
+    return any(m in u for m in SECRET_MARKS) and not u.endswith("_TOKENS")   # CLAUDE_CODE_MAX_OUTPUT_TOKENS is a number
 
 
 def mask(value):
@@ -248,6 +249,95 @@ def write_settings(cfg, name, doc):
     path = os.path.join(cfg, "run", "%s.settings.json" % name)
     _write_private(path, json.dumps(doc, indent=2) + "\n")
     return path
+
+
+# --------------------------------------------------------------------------
+# Whole-provider documents (`provider get` / `provider put`, used by the web dashboard)
+# --------------------------------------------------------------------------
+
+ENV_VAR = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+ALIAS = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+WIRE_APIS = ("responses", "chat")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def document(p, reveal=False):
+    """-> the editable view of provider p; secrets are masked unless reveal"""
+    if agent(p) == "claude":
+        env = {var: val if reveal else shown(var, val) for var, val in p["env"].items()}
+        return {"agent": "claude", "env": env, "models": models(p)}
+    key = p.get("key", "")
+    return {"agent": "codex", "base_url": p.get("base_url", ""), "key": key if reveal or not key else mask(key),
+            "model": p.get("model", ""), "wire_api": p.get("wire_api", "responses"), "models": models(p)}
+
+
+def _text(v, what, empty=False):
+    if not isinstance(v, str) or _CONTROL.search(v) or (not v and not empty):
+        raise ValueError("%s is missing or has control characters" % what)
+    return v
+
+
+def _base_url(v):
+    _text(v, "base URL")
+    m = re.match(r"^https?://([^/?#]*)", v)
+    if not m or not m.group(1) or "@" in m.group(1):
+        raise ValueError("base URL must be http(s):// with a host and no credentials")
+    return v.rstrip("/")
+
+
+def _keep(new, old, var=None):
+    """A secret sent back in its masked form means 'unchanged'."""
+    return old if old and new == (shown(var, old) if var else mask(old)) else new
+
+
+def from_document(old, doc):
+    """-> the provider dict for an edited document. Raises ValueError with a message that never
+    contains a secret. The agent cannot change; a masked secret keeps its stored value."""
+    if not isinstance(doc, dict) or doc.get("agent") != agent(old):
+        raise ValueError("document must be an object for the same agent (%s)" % agent(old))
+    cat = doc.get("models") or {}
+    if not isinstance(cat, dict):
+        raise ValueError("models must be an object {alias: model id}")
+    for alias, mid in cat.items():
+        if not ALIAS.match(alias):
+            raise ValueError("model alias %r must use letters, digits, . _ - (max 64)" % alias[:40])
+        _text(mid, "model id for %s" % alias)
+    p = dict(old)
+    if agent(old) == "claude":
+        env = doc.get("env")
+        if not isinstance(env, dict):
+            raise ValueError("env must be an object {VAR: value}")
+        new = {}
+        for var, val in env.items():
+            if not ENV_VAR.match(var):
+                raise ValueError("%r is not an environment variable name (capitals, digits, _)" % var[:40])
+            _text(val, var, empty=True)
+            new[var] = _keep(val, old["env"].get(var, ""), var) if is_secret(var) else val
+        new["ANTHROPIC_BASE_URL"] = _base_url(new.get("ANTHROPIC_BASE_URL"))
+        if not key_var(new):
+            raise ValueError("env needs ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY")
+        p["env"] = new
+    else:
+        p["base_url"] = _base_url(doc.get("base_url"))
+        p["key"] = _keep(_text(doc.get("key"), "key"), old.get("key", ""))
+        p["model"] = _text(doc.get("model"), "model")
+        if doc.get("wire_api") not in WIRE_APIS:
+            raise ValueError("wire_api must be one of: %s" % ", ".join(WIRE_APIS))
+        p["wire_api"] = doc["wire_api"]
+    if cat:
+        p["models"] = dict(cat)
+    else:
+        p.pop("models", None)
+    return p
+
+
+def backup(cfg):
+    """Keep the previous providers.json next to it (0600) before a rewrite."""
+    try:
+        with open(_file(cfg)) as f:
+            _write_private(_file(cfg) + ".bak", f.read())
+    except FileNotFoundError:
+        pass
 
 
 # --------------------------------------------------------------------------

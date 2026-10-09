@@ -266,6 +266,7 @@ are blanked, so a relay's model names do not leak into another provider.
 | `zorua <name> [args…]` | One-shot: run `codex` or `claude` under that account |
 | `zorua bind [name]` / `unbind [dir]` / `binds` | Manage directory bindings |
 | `zorua provider add\|ls\|show\|rm\|import` | Manage third-party Claude Code and Codex providers (see above) |
+| `zorua provider get <name> [--reveal]` / `put <name>` | One provider as JSON (keys masked unless `--reveal`) / replace it from JSON on stdin; `put` keeps `providers.json.bak`. The web dashboard edits providers through these |
 | `zorua use <provider>[:<model>]` / `zorua <provider>[:<model>] [args…]` | Switch this shell to a provider (and a model of it) / one-shot run |
 | `zorua model [alias\|-]` | List / pick / clear the model of the active provider |
 | `zorua provider models <name> [add\|rm\|fetch]` | Manage a provider's model catalog |
