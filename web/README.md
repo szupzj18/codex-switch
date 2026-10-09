@@ -15,7 +15,7 @@ It is optional and separate from the Python program; it is not part of the relea
 | sign in again | `zorua login <name>`: the CLI opens your browser; the page shows the link it printed and the result |
 | remove an account; optionally delete its data directory | `zorua rm <name> [--purge]` |
 | add or remove a provider (key typed once, stored by zorua in its own `providers.json`) | `zorua provider add / rm` |
-| view and edit a provider: every env variable, the key, the model catalog (a masked key is kept as is; **show keys** reads the real one) | `zorua provider get [--reveal]`, `zorua provider put` (keeps `providers.json.bak`) |
+| view and edit a provider: base URL, key and the five model slots up front, the model catalog and all other env variables in collapsible sections. There is no save button: a field is saved when you leave it (a masked key is kept as is; **show keys** reads the real one; **copy** copies it without showing) | `zorua provider get [--reveal]`, `zorua provider put` (keeps `providers.json.bak`) |
 | bind or unbind a directory | `zorua bind <name>` run inside that directory, `zorua unbind <dir>` |
 
 Safety:
