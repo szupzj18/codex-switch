@@ -6,7 +6,7 @@
 <title>Zorua — many accounts, one terminal each</title>
 <link rel="icon" type="image/svg+xml" href="assets/zorua-icon.svg">
 <link rel="alternate" type="text/plain" href="llms.txt" title="Agent-readable description">
-<meta name="description" content="Run different Codex CLI and Claude Code accounts in different terminals at the same time. One small Python program, works in zsh, bash and fish. No daemon.">
+<meta name="description" content="Run different Codex CLI and Claude Code accounts and providers in different terminals at the same time. One small Python program, works in zsh, bash and fish. No daemon.">
 <style>
 :root{--bg:#0b0d0c;--panel:#111514;--line:#1f2623;--fg:#d7dedb;--dim:#7b8884;--g:#5eead4;--y:#fbbf24;--p:#c4b5fd;--r:#fb7185}
 *{box-sizing:border-box}
@@ -17,132 +17,161 @@ h1{font:700 clamp(1.9rem,6vw,3.2rem)/1.1 ui-monospace,Menlo,monospace;margin:8px
 h1 span{color:var(--g)}
 p{margin:0 0 14px;color:var(--dim)}
 a{color:var(--g)}
+code{color:var(--fg)}
 .term{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .bar{display:flex;gap:6px;padding:9px 12px;border-bottom:1px solid var(--line);align-items:center;color:var(--dim);font-size:.78rem}
 .bar i{width:10px;height:10px;border-radius:50%;background:#2a3330;display:block}
 .bar b{margin-left:8px;font-weight:400}
 pre{margin:0;padding:14px 16px;overflow-x:auto;font:.86rem/1.6 ui-monospace,Menlo,monospace;color:var(--fg)}
 .d{color:var(--dim)}.g{color:var(--g)}.y{color:var(--y)}.p{color:var(--p)}.r{color:var(--r)}
-.panes{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin:28px 0}
 .cta{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--g);border-radius:8px;padding:12px 14px;margin:24px 0 8px;overflow-x:auto}
 .cta code{white-space:nowrap;color:var(--g)}
 .cta button{margin-left:auto;background:var(--g);color:#04110e;border:0;border-radius:5px;padding:4px 12px;font:inherit;font-size:.8rem;cursor:pointer;font-weight:700}
-.vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:28px 0 8px}
-@media(max-width:620px){.vs{grid-template-columns:1fr}}
-.vs .term.bad{border-color:#4c1d26}.vs .term.good{border-color:#134e44}
-.vs .bar b.r{color:var(--r)}.vs .bar b.g{color:var(--g)}
-.vs p{padding:0 16px 14px;margin:0;font-size:.84rem}
 h2{font-size:1.05rem;margin:48px 0 14px;color:var(--fg)}
 h2::before{content:"# ";color:var(--g)}
 ul{list-style:none;padding:0;margin:0;color:var(--dim)}
 li{padding:5px 0}li::before{content:"› ";color:var(--g)}
 li b{color:var(--fg);font-weight:600}
 footer{margin-top:56px;color:var(--dim);font-size:.82rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.note{font-size:.84rem}
+
+.hero{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.hero>div{flex:1 1 380px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin:0}
+.tabs button{background:transparent;color:var(--dim);border:1px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0;padding:7px 14px;font:inherit;font-size:.82rem;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--panel);color:var(--g)}
+.tabs button:focus-visible{outline:2px solid var(--g);outline-offset:2px}
+.pane{display:none}.pane.on{display:block}
+.tabbed>.term{border-radius:0 10px 10px 10px}
+.matrix{display:grid;grid-template-columns:110px 1fr 1fr;gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.matrix>div{background:var(--panel);padding:11px 14px;font-size:.82rem}
+.matrix .h{color:var(--dim);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase}
+.matrix .row{color:var(--g);font-weight:700}
+.matrix code{display:block;color:var(--y);font-size:.8rem}
+.matrix .v{display:block;margin:2px 0 4px;transition:color .2s}
+.matrix .v.set{color:var(--g)}.matrix .v.unset{color:var(--dim)}
+.matrix .cmd{color:var(--dim);font-size:.76rem}
+.matrix .cell.hit{box-shadow:inset 0 0 0 1px var(--g)}
+@media(max-width:640px){.matrix{grid-template-columns:1fr}.matrix .h{display:none}.matrix .row{padding-bottom:0}}
+table{width:100%;border-collapse:collapse;font-size:.84rem}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:400;font-size:.72rem;letter-spacing:.05em;text-transform:uppercase}
+td:first-child{white-space:nowrap;color:var(--g)}
+td:last-child{color:var(--dim)}
+.tw{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.tw tr:last-child td{border-bottom:0}
+footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:0 9px;font-size:.74rem;color:var(--dim);margin-left:6px;vertical-align:middle}
 </style>
 </head>
 <body>
 <main>
-  <img src="assets/zorua-icon.svg" width="72" height="72" alt="Zorua: a fox with a ghost afterimage of itself" style="display:block;margin-bottom:14px">
-  <div class="tag">$ zorua version → Zorua 0.6.0</div>
-  <h1>Many accounts.<br><span>One terminal each.</span></h1>
-  <p>Zorua keeps your Codex CLI and Claude Code accounts apart. Works in zsh, bash and fish. Every account gets its own <code>CODEX_HOME</code> or <code>CLAUDE_CONFIG_DIR</code>, so four panes can run four sign-ins at once. No daemon, no proxy, nothing to restart.</p>
+  <div class="hero">
+    <img src="assets/zorua-icon.svg" width="88" height="88" alt="Zorua: a fox with a ghost afterimage of itself">
+    <div>
+      <div class="tag">$ zorua version → Zorua 0.6.0</div>
+      <h1>Many accounts.<br><span>One terminal each.</span></h1>
+      <p>Zorua is a small shell layer for Codex CLI and Claude Code. A terminal's setup is four environment variables, so changing one terminal never touches another. zsh, bash and fish. No daemon, no proxy.</p>
+    </div>
+  </div>
 
-  <div class="cta"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/install.sh | sh</code><button id="copy" type="button">copy</button></div>
+  <div class="cta"><code>curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/install.sh | sh</code><button type="button">copy</button></div>
   <p><a href="https://github.com/szupzj18/zorua">github.com/szupzj18/zorua</a> · <a href="llms.txt">llms.txt</a> <span style="opacity:.6">(for agents)</span></p>
 
-  <h2>global switch vs. zorua</h2>
-  <div class="vs">
-    <div class="term bad"><div class="bar"><i></i><i></i><i></i><b class="r">global switch (swap auth.json)</b></div>
-<pre>window 1  work  <span class="r">→ side</span>
-window 2  work  <span class="r">→ side</span>
-window 3  work  <span class="r">→ side</span></pre>
-<p>One active account machine-wide. Switch in one window and the rest silently follow.</p></div>
-    <div class="term good"><div class="bar"><i></i><i></i><i></i><b class="g">Zorua (config dir per shell)</b></div>
-<pre>window 1  <span class="g">work</span>
-window 2  <span class="g">side</span>
-window 3  <span class="g">client-acme</span></pre>
-<p>The account is a shell variable. Every window keeps its own, at the same time.</p></div>
+  <h2>the four slots of a terminal</h2>
+  <p class="note">Pick a scenario. The slots below show what this shell holds after the commands run.</p>
+  <div class="tabbed">
+    <div class="tabs" role="tablist" aria-label="Zorua scenarios">
+      <button role="tab" aria-selected="true">accounts</button>
+      <button role="tab" aria-selected="false">providers</button>
+      <button role="tab" aria-selected="false">both</button>
+      <button role="tab" aria-selected="false">undo</button>
+    </div>
+    <div class="term">
+      <div class="bar"><i></i><i></i><i></i><b>this shell</b></div>
+      <div class="pane on"><pre><span class="g">$</span> zorua use work
+<span class="d">this shell -&gt; codex account: work</span>
+<span class="g">$</span> zorua use alt
+<span class="d">this shell -&gt; claude account: alt</span></pre></div>
+      <div class="pane"><pre><span class="g">$</span> zorua use ds      <span class="d"># plain `codex` runs on deepseek</span>
+<span class="g">$</span> zorua use kimi    <span class="d"># plain `claude` runs on kimi, same shell</span></pre></div>
+      <div class="pane"><pre><span class="g">$</span> zorua use work       <span class="d"># codex account</span>
+<span class="g">$</span> zorua use kimi       <span class="d"># claude provider</span>
+<span class="d">two different slots; neither replaces the other</span></pre></div>
+      <div class="pane"><pre><span class="g">$</span> zorua off providers
+<span class="d">cleared the providers; accounts (CODEX_HOME, CLAUDE_CONFIG_DIR) kept</span>
+<span class="g">$</span> zorua off
+<span class="d">cleared CODEX_HOME, CLAUDE_CONFIG_DIR and the providers; back to defaults</span></pre></div>
+      <div class="matrix" aria-live="polite">
+        <div class="h"></div><div class="h">account (a subscription login)</div><div class="h">provider (a third-party endpoint)</div>
+        <div class="row">Codex CLI</div>
+        <div class="cell" id="c0"><code>CODEX_HOME</code><span class="v" id="v0"></span><span class="cmd">zorua add work · zorua use work</span></div>
+        <div class="cell" id="c2"><code>ZORUA_CODEX_PROVIDER</code><span class="v" id="v2"></span><span class="cmd">zorua provider add ds --codex … · zorua use ds</span></div>
+        <div class="row">Claude Code</div>
+        <div class="cell" id="c1"><code>CLAUDE_CONFIG_DIR</code><span class="v" id="v1"></span><span class="cmd">zorua add --claude alt · zorua use alt</span></div>
+        <div class="cell" id="c3"><code>ZORUA_CLAUDE_PROVIDER</code><span class="v" id="v3"></span><span class="cmd">zorua provider add kimi … · zorua use kimi</span></div>
+      </div>
+    </div>
   </div>
+  <p class="note" style="margin-top:10px">Each slot holds one value per terminal. <code>zorua use</code> fills one slot and leaves the others alone.</p>
 
-  <div class="panes">
-    <div class="term"><div class="bar"><i></i><i></i><i></i><b>pane 1</b></div>
-<pre><span class="d">~/code/company-api</span> <span class="p">[codex:work:auto]</span>
-<span class="g">$</span> codex
-<span class="d">signed in as</span> alice@company.com</pre></div>
-    <div class="term"><div class="bar"><i></i><i></i><i></i><b>pane 2</b></div>
-<pre><span class="d">~/code/side-project</span> <span class="p">[claude:alt]</span>
-<span class="g">$</span> claude
-<span class="d">signed in as</span> alice@gmail.com <span class="d">(Claude Code)</span></pre></div>
-  </div>
+  <h2>commands</h2>
+  <div class="tw"><table>
+    <tr><th>command</th><th>what it does</th></tr>
+    <tr><td>zorua add [--claude] &lt;name&gt;</td><td>new account directory and sign-in</td></tr>
+    <tr><td>zorua use &lt;name&gt; | use -</td><td>fill a slot in this shell | clear everything</td></tr>
+    <tr><td>zorua &lt;name&gt; [args]</td><td>one-shot run; stale <code>ANTHROPIC_*</code> variables are cleaned for the run</td></tr>
+    <tr><td>zorua bind [name]</td><td>this directory switches automatically on <code>cd</code></td></tr>
+    <tr><td>zorua usage [-v]</td><td>5h / 7d limits per account</td></tr>
+    <tr><td>zorua provider add|models|import</td><td>manage endpoints, their models, and import from cc-switch</td></tr>
+    <tr><td>zorua off providers <span class="pill">main</span></td><td>clear the provider slots, keep the accounts</td></tr>
+    <tr><td>zorua off</td><td>clear all four slots</td></tr>
+  </table></div>
 
+  <h2>defaults for new Claude accounts <span class="pill">main</span></h2>
+  <div class="term"><pre><span class="g">$</span> cat ~/.config/zorua/claude-settings.json
+{ <span class="p">"env"</span>: { <span class="p">"HTTPS_PROXY"</span>: <span class="y">"http://127.0.0.1:7897"</span>, <span class="p">"NO_PROXY"</span>: <span class="y">"localhost,127.0.0.1"</span> } }
+<span class="g">$</span> zorua add --claude second        <span class="d"># settings.json starts from the template</span></pre></div>
+  <p class="note" style="margin-top:10px">Copied only when the new account has no <code>settings.json</code> yet; an existing one is never overwritten.</p>
+
+  <h2>usage board</h2>
   <div class="term"><div class="bar"><i></i><i></i><i></i><b>zorua usage</b></div>
 <pre><span class="g">$</span> zorua usage
 <b> Codex</b>
 <span class="d">   NAME     PLAN    5H           7D           RESET</span>
  <span class="g">●</span> default  <span class="g">pro</span>     <span class="d">–</span>            <span class="g">▓</span><span class="d">░░░░░</span>   6%  4d9h
-   work     <span class="p">promax</span>  <span class="d">–</span>            <span class="d">░░░░░░</span>   0%  7d
    side     <span class="g">team</span>    <span class="d">░░░░░░</span>   0%  <span class="g">▓▓</span><span class="d">░░░░</span>  26%  1d15h
 
 <b> Claude Code</b>
 <span class="d">   NAME  PLAN  5H           7D           RESET</span>
-   alt   <span class="p">max</span>   <span class="g">▓▓▓</span><span class="d">░░░</span>  42%  <span class="g">▓</span><span class="d">░░░░░</span>   7%  4d9h
+   alt   <span class="p">max</span>   <span class="g">▓▓▓</span><span class="d">░░░</span>  42%  <span class="g">▓</span><span class="d">░░░░░</span>   7%  4d9h</pre></div>
 
-<span class="d"> ● this shell  ◆ auto-bound directory</span>
-<span class="d"> alt: Claude usage as of 3m ago (from its last session)</span></pre></div>
-
-  <div class="term" style="margin-top:12px"><div class="bar"><i></i><i></i><i></i><b>zorua usage -v</b></div>
-<pre><span class="g">$</span> zorua usage -v
-<b> Codex</b>
-<span class="d"> ──────────────────────────────────────────────────────────</span>
- <span class="g">●</span> <b>side      </b>  bob@gmail.com  <span class="g">team</span>
-   <span class="d">~/.codex-side</span>
-   5h  <span class="d">░░░░░░░░░░░░░░░░░░░░</span>   0%   <span class="d">resets in 5h0m</span>
-   7d  <span class="g">▓▓▓▓▓▓</span><span class="d">░░░░░░░░░░░░░░</span>  26%   <span class="d">resets in 1d15h</span>
-<span class="d"> ──────────────────────────────────────────────────────────</span>
-
-<b> Claude Code</b>
-<span class="d"> ──────────────────────────────────────────────────────────</span>
- <span class="g">●</span> <b>alt       </b>  alice@gmail.com  <span class="p">max</span>
-   <span class="d">~/.claude-alt</span>
-   5h  <span class="g">▓▓▓▓▓▓▓▓▓</span><span class="d">░░░░░░░░░░░</span>  42%   <span class="d">resets in 2h10m</span>
-   7d  <span class="g">▓▓</span><span class="d">░░░░░░░░░░░░░░░░░░</span>   7%   <span class="d">resets in 4d9h</span>
-<span class="d"> ──────────────────────────────────────────────────────────</span></pre></div>
-
-  <h2>features</h2>
-  <ul>
-    <li><b>parallel</b> — selection is an env var; no global active account to flip</li>
-    <li><b>bind on cd</b> — <code>zorua bind work</code> and the repo switches automatically</li>
-    <li><b>usage</b> — one-line-per-account board with 5h/7d bars; <code>-v</code> for details and credits</li>
-    <li><b>Codex and Claude Code</b> — <code>zorua add --claude alt</code> gives a Claude subscription its own <code>CLAUDE_CONFIG_DIR</code>; one table, one set of commands</li>
-    <li><b>providers</b> — third-party endpoints (GLM, Kimi, DeepSeek, a relay) for Claude Code <i>and</i> Codex, one slot per agent per terminal, many models per provider (<code>zorua model</code>); import from cc-switch with <code>zorua provider import cc-switch</code></li>
-    <li><b>any shell</b> — zsh, bash and fish, same commands and the same auto-switch on cd</li>
-    <li><b>zero deps</b> — Python 3.8+ standard library only, nothing to pip install</li>
-  </ul>
-
-  <h2>quick start</h2>
-  <div class="term"><pre><span class="g">$</span> zorua add work          <span class="d"># new CODEX_HOME + sign in</span>
-<span class="g">$</span> zorua use work          <span class="d"># this shell only</span>
-<span class="g">$</span> zorua work exec "explain this repo"
-<span class="g">$</span> zorua bind work         <span class="d"># auto-switch in this directory</span></pre></div>
-
-  <h2>providers</h2>
-  <div class="term"><pre><span class="g">$</span> zorua provider add kimi --base-url https://api.moonshot.cn/anthropic --model default=kimi-k2
-<span class="g">$</span> zorua provider add deepseek --codex --base-url https://api.deepseek.com --model deepseek-v4-flash
-<span class="g">$</span> zorua use kimi           <span class="d"># plain `claude` in this shell runs on kimi</span>
-<span class="g">$</span> zorua use deepseek       <span class="d"># plain `codex` runs on deepseek, at the same time</span>
-<span class="g">$</span> zorua provider models kimi fetch   <span class="d"># a relay may serve a dozen models</span>
-<span class="g">$</span> zorua use kimi:k3            <span class="d"># provider and model in one go</span>
-<span class="g">$</span> zorua model                  <span class="d"># list, ● marks the picked one</span>
-<span class="g">$</span> zorua provider import cc-switch --dry-run</pre></div>
-  <p>Each agent has its own provider slot. Claude Code is started with <code>--settings</code> (a private file, so the key never shows in <code>ps</code> and <code>settings.json</code> is never written); Codex gets <code>-c</code> overrides and its key in an environment variable. No proxy, no daemon. Skills, plugins, MCP servers, hooks and every other setting stay as they are; only the provider's own settings are overridden.</p>
-
-  <h2>why zorua</h2>
-  <p>Zorua is the illusion fox of the Pokémon games: it takes on the appearance of other creatures, so what you see is not always what is really there. That is the trick this tool plays on your terminals. One machine, one login session, and every window shows up as a different account: work in one pane, personal in the next, a client's team plan in a third, each with its own sign-in, history and quota. The icon is an original drawing, not Pokémon artwork; the name is only a nod, and this is an independent project.</p>
-
-  <footer>Formerly CodeX Switch · MIT · zsh, bash or fish · Python 3.8+ · works with the official Codex CLI and/or Claude Code · <code>zorua usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
+  <footer><p class="fine">The name is a nod to the illusion fox of the Pokémon games, which takes on the appearance of other creatures; here every window shows up as a different account. The icon is an original drawing, not Pokémon artwork, and this is an independent project.</p>Formerly CodeX Switch · MIT · zsh, bash or fish · Python 3.8+ · works with the official Codex CLI and/or Claude Code · <code>zorua usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
 </main>
-<script>
-document.getElementById('copy').addEventListener('click',function(e){var b=e.currentTarget;navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1500)}).catch(function(){})});
+<script>document.querySelectorAll('.cta button').forEach(function(b){b.addEventListener('click',function(){var t=b.parentNode.querySelector('code').textContent;navigator.clipboard.writeText(t).then(function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1500)}).catch(function(){})})});
+
+(function(){
+var U=["unset","unset"];
+// slots: 0 CODEX_HOME, 1 CLAUDE_CONFIG_DIR, 2 ZORUA_CODEX_PROVIDER, 3 ZORUA_CLAUDE_PROVIDER
+var S=[
+ [["~/.codex-work","set"],["~/.claude-alt","set"],U,U],
+ [U,U,["ds","set"],["kimi","set"]],
+ [["~/.codex-work","set"],U,U,["kimi","set"]],
+ [U,U,U,U]
+];
+var tabs=document.querySelectorAll('.tabs button'),panes=document.querySelectorAll('.pane'),prev=null;
+function show(i){
+  tabs.forEach(function(b,j){b.setAttribute('aria-selected',j===i)});
+  panes.forEach(function(p,j){p.classList.toggle('on',j===i)});
+  S[i].forEach(function(v,k){
+    var e=document.getElementById('v'+k);e.textContent=v[0];e.className='v '+v[1];
+    document.getElementById('c'+k).classList.toggle('hit',v[1]==='set');
+  });
+}
+tabs.forEach(function(b,i){b.addEventListener('click',function(){show(i)})});
+show(0);
+})();
 </script>
 </body>
 </html>
