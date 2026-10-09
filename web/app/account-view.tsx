@@ -1,4 +1,5 @@
 import type { Account, Binding } from "@/lib/types";
+import { CopyButton } from "./copy";
 import { ago, Bar, PLAN_STYLE, usageNote } from "./usage";
 
 const linkBtn = "rounded-md border border-line px-3 py-1.5 text-xs text-dim hover:text-fg";
@@ -35,6 +36,9 @@ export function AccountView({ a, bindings, onLogin, onRemove }: { a: Account; bi
           <button type="button" onClick={onLogin} className={linkBtn}>
             sign in again
           </button>
+          <span className={`${linkBtn} flex items-center`}>
+            <CopyButton variant="link" text="copy command" label={`copy: zorua use ${a.name}`} get={async () => `zorua use ${a.name}`} />
+          </span>
           {a.name !== "default" && (
             <button type="button" onClick={onRemove} className={`${linkBtn} hover:text-danger`}>
               remove

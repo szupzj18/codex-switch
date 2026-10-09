@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { knownChecks } from "@/lib/checks";
 import { guard } from "@/lib/guard";
 import { getState } from "@/lib/zorua";
 
@@ -9,7 +10,8 @@ export async function GET(request: Request) {
   const force = new URL(request.url).searchParams.has("refresh");
   try {
     const body = await getState(force);
-    return Response.json(body, { headers: { "Cache-Control": "no-store" } });
+    const checks = knownChecks(body.data.providers.map((p) => p.name));
+    return Response.json({ ...body, checks }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : String(e) },
