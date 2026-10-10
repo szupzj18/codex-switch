@@ -307,6 +307,10 @@ serves every shell.
 
 ## Web dashboard (optional)
 
+[![The Zorua web dashboard: summary cards, accounts with 5h/7d usage bars, providers and directory bindings](docs/assets/dashboard-overview-dark.webp)](https://szupzj18.github.io/zorua/demo/)
+
+**[Try it live](https://szupzj18.github.io/zorua/demo/)**: the real dashboard running in your browser on made-up data (nothing leaves the page).
+
 `web/` holds a small local dashboard (Next.js + Tailwind CSS) for accounts, 5h/7d usage, providers and directory bindings, with add/remove/sign-in and a provider editor (env variables, key, model catalog; copy a key without showing it). Dark by default, light follows the system. It reads `zorua usage --json`, listens on `127.0.0.1:4747` only and runs the matching `zorua` commands for changes. See [web/README.md](web/README.md).
 
 ## Files and configuration

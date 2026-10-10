@@ -7,6 +7,18 @@
 <link rel="icon" type="image/svg+xml" href="assets/zorua-icon.svg">
 <link rel="alternate" type="text/plain" href="llms.txt" title="Agent-readable description">
 <meta name="description" content="Run different Codex CLI and Claude Code accounts and providers in different terminals at the same time. One small Python program, works in zsh, bash and fish. No daemon.">
+<link rel="canonical" href="https://szupzj18.github.io/zorua/">
+<meta name="theme-color" content="#0b0d0c">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Zorua">
+<meta property="og:title" content="Zorua — many accounts, one terminal each">
+<meta property="og:description" content="Run different Codex CLI and Claude Code accounts and providers in different terminals at the same time. One small Python program, works in zsh, bash and fish. No daemon.">
+<meta property="og:url" content="https://szupzj18.github.io/zorua/">
+<meta property="og:image" content="https://szupzj18.github.io/zorua/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Zorua web dashboard: accounts with 5-hour and 7-day usage, providers and directory bindings.">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 :root{--bg:#0b0d0c;--panel:#111514;--line:#1f2623;--fg:#d7dedb;--dim:#7b8884;--g:#5eead4;--y:#fbbf24;--p:#c4b5fd;--r:#fb7185}
 *{box-sizing:border-box}
@@ -61,7 +73,7 @@ td:first-child{white-space:nowrap;color:var(--g)}
 td:last-child{color:var(--dim)}
 .tw{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
 .tw tr:last-child td{border-bottom:0}
-footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
+footer .fine{font-size:.76rem;margin:0 0 10px}
 .live{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
 .live .bar .r{margin-left:auto;color:var(--g)}
 .stage{position:relative;aspect-ratio:2880/2000;background:#090c0b;overflow:hidden}
@@ -70,6 +82,7 @@ footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
 .stage iframe.on{opacity:1}
 @media(max-width:700px){.stage{aspect-ratio:auto;height:640px}.stage img{display:none}.stage iframe{width:100%;height:100%;transform:none!important}}
 @media(prefers-reduced-motion:reduce){.stage iframe{transition:none}}
+pre:focus-visible,.tw:focus-visible{outline:2px solid var(--g);outline-offset:2px}
 .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:0 9px;font-size:.74rem;color:var(--dim);margin-left:6px;vertical-align:middle}
 </style>
 </head>
@@ -85,7 +98,7 @@ footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
   </div>
 
   <div class="cta"><code>curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/install.sh | sh</code><button type="button">copy</button></div>
-  <p><a href="https://github.com/szupzj18/zorua">github.com/szupzj18/zorua</a> · <a href="llms.txt">llms.txt</a> <span style="opacity:.6">(for agents)</span></p>
+  <p><a href="https://github.com/szupzj18/zorua">github.com/szupzj18/zorua</a> · <a href="llms.txt">llms.txt</a> <span>(for agents)</span></p>
 
   <h2>the four slots of a terminal</h2>
   <p class="note">Pick a scenario. The slots below show what this shell holds after the commands run.</p>
@@ -98,16 +111,16 @@ footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
     </div>
     <div class="term">
       <div class="bar"><i></i><i></i><i></i><b>this shell</b></div>
-      <div class="pane on"><pre><span class="g">$</span> zorua use work
+      <div class="pane on"><pre tabindex="0"><span class="g">$</span> zorua use work
 <span class="d">this shell -&gt; codex account: work</span>
 <span class="g">$</span> zorua use alt
 <span class="d">this shell -&gt; claude account: alt</span></pre></div>
-      <div class="pane"><pre><span class="g">$</span> zorua use ds      <span class="d"># plain `codex` runs on deepseek</span>
+      <div class="pane"><pre tabindex="0"><span class="g">$</span> zorua use ds      <span class="d"># plain `codex` runs on deepseek</span>
 <span class="g">$</span> zorua use kimi    <span class="d"># plain `claude` runs on kimi, same shell</span></pre></div>
-      <div class="pane"><pre><span class="g">$</span> zorua use work       <span class="d"># codex account</span>
+      <div class="pane"><pre tabindex="0"><span class="g">$</span> zorua use work       <span class="d"># codex account</span>
 <span class="g">$</span> zorua use kimi       <span class="d"># claude provider</span>
 <span class="d">two different slots; neither replaces the other</span></pre></div>
-      <div class="pane"><pre><span class="g">$</span> zorua off providers
+      <div class="pane"><pre tabindex="0"><span class="g">$</span> zorua off providers
 <span class="d">cleared the providers; accounts (CODEX_HOME, CLAUDE_CONFIG_DIR) kept</span>
 <span class="g">$</span> zorua off
 <span class="d">cleared CODEX_HOME, CLAUDE_CONFIG_DIR and the providers; back to defaults</span></pre></div>
@@ -125,7 +138,7 @@ footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
   <p class="note" style="margin-top:10px">Each slot holds one value per terminal. <code>zorua use</code> fills one slot and leaves the others alone.</p>
 
   <h2>commands</h2>
-  <div class="tw"><table>
+  <div class="tw" tabindex="0"><table>
     <tr><th>command</th><th>what it does</th></tr>
     <tr><td>zorua add [--claude] &lt;name&gt;</td><td>new account directory and sign-in</td></tr>
     <tr><td>zorua use &lt;name&gt; | use -</td><td>fill a slot in this shell | clear everything</td></tr>
@@ -140,14 +153,14 @@ footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
   </table></div>
 
   <h2>defaults for new Claude accounts <span class="pill">main</span></h2>
-  <div class="term"><pre><span class="g">$</span> cat ~/.config/zorua/claude-settings.json
+  <div class="term"><pre tabindex="0"><span class="g">$</span> cat ~/.config/zorua/claude-settings.json
 { <span class="p">"env"</span>: { <span class="p">"HTTPS_PROXY"</span>: <span class="y">"http://127.0.0.1:7897"</span>, <span class="p">"NO_PROXY"</span>: <span class="y">"localhost,127.0.0.1"</span> } }
 <span class="g">$</span> zorua add --claude second        <span class="d"># settings.json starts from the template</span></pre></div>
   <p class="note" style="margin-top:10px">Copied only when the new account has no <code>settings.json</code> yet; an existing one is never overwritten.</p>
 
   <h2>usage board</h2>
   <div class="term"><div class="bar"><i></i><i></i><i></i><b>zorua usage</b></div>
-<pre><span class="g">$</span> zorua usage
+<pre tabindex="0"><span class="g">$</span> zorua usage
 <b> Codex</b>
 <span class="d">   NAME     PLAN    5H           7D           RESET</span>
  <span class="g">●</span> default  <span class="g">pro</span>     <span class="d">–</span>            <span class="g">▓</span><span class="d">░░░░░</span>   6%  4d9h
@@ -159,7 +172,7 @@ footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
 
   <h2>web dashboard <span class="pill">optional</span></h2>
   <div class="term"><div class="bar"><i></i><i></i><i></i><b>web/</b></div>
-<pre><span class="g">$</span> cd web &amp;&amp; npm ci &amp;&amp; npm run build &amp;&amp; npm start
+<pre tabindex="0"><span class="g">$</span> cd web &amp;&amp; npm ci &amp;&amp; npm run build &amp;&amp; npm start
 <span class="d">http://127.0.0.1:4747  (loopback only)</span></pre></div>
   <p class="note" style="margin-top:10px">A local page for accounts, 5h/7d usage, providers and directory bindings: add, remove and sign in, and edit a provider's env variables, key and model list. Keys stay masked until you press show or copy. Dark by default; light follows the system. Press <code>⌘K</code> (or <code>/</code>) to jump to any account or provider, and <code>?</code> lists the single-key shortcuts. It runs the same <code>zorua</code> commands, is not installed by the installer, and is a separate process: Zorua itself still has no daemon.</p>
 
