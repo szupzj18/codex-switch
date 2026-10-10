@@ -228,7 +228,7 @@ const empty = (text: string) => <li className="px-4 py-6 text-center text-xs tex
 
 /** Grey placeholders with the overview's shape, shown until the first read finishes. */
 export function OverviewSkeleton() {
-  const block = "animate-shimmer rounded-2xl border border-line bg-panel";
+  const block = "squircle animate-shimmer rounded-2xl border border-line bg-panel";
   return (
     <div aria-busy="true" aria-label="Loading">
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

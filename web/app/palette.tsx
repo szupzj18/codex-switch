@@ -101,7 +101,7 @@ export function Palette({ commands, initial = "", onClose }: { commands: Command
       aria-label="Command palette"
       onClose={onClose}
       onClick={(e) => e.target === ref.current && ref.current?.close()}
-      className="m-0 mx-auto mt-[12vh] w-[min(92vw,36rem)] overflow-hidden rounded-2xl border border-line-strong bg-panel p-0 text-fg shadow-pop backdrop:bg-black/60 backdrop:backdrop-blur-sm open:animate-pop"
+      className="squircle m-0 mx-auto mt-[12vh] w-[min(92vw,36rem)] overflow-hidden rounded-2xl border border-line-strong bg-panel p-0 text-fg shadow-pop backdrop:bg-black/60 backdrop:backdrop-blur-sm open:animate-pop"
     >
       <div className="flex items-center gap-3 border-b border-line px-4">
         <Icon name="search" className="size-4 text-dim" />

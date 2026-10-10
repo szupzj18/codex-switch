@@ -368,7 +368,7 @@ export default function Dashboard() {
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
         {toast && (
           <div
-            className="pointer-events-auto flex max-w-[34rem] animate-toast items-center gap-3 rounded-xl border border-line-strong bg-panel px-4 py-2.5 text-xs shadow-pop"
+            className="squircle pointer-events-auto flex max-w-[34rem] animate-toast items-center gap-3 rounded-xl border border-line-strong bg-panel px-4 py-2.5 text-xs shadow-pop"
             onMouseEnter={() => setToastHeld(true)}
             onMouseLeave={() => setToastHeld(false)}
             onFocus={() => setToastHeld(true)}
