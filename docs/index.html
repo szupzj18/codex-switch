@@ -62,6 +62,10 @@ td:last-child{color:var(--dim)}
 .tw{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
 .tw tr:last-child td{border-bottom:0}
 footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
+.shot{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);min-width:0}
+.shot img{display:block;width:100%;height:auto}
+.shots{display:flex;gap:12px;align-items:flex-start;margin-top:12px}
+@media(max-width:640px){.shots{flex-direction:column}.shots .shot{flex:none!important;width:100%}.shots .shot.tall{width:62%}}
 .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:0 9px;font-size:.74rem;color:var(--dim);margin-left:6px;vertical-align:middle}
 </style>
 </head>
@@ -153,7 +157,15 @@ footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
   <div class="term"><div class="bar"><i></i><i></i><i></i><b>web/</b></div>
 <pre><span class="g">$</span> cd web &amp;&amp; npm ci &amp;&amp; npm run build &amp;&amp; npm start
 <span class="d">http://127.0.0.1:4747  (loopback only)</span></pre></div>
-  <p class="note" style="margin-top:10px">A local page for accounts, 5h/7d usage, providers and directory bindings: add, remove and sign in, and edit a provider's env variables, key and model list. Keys stay masked until you press show or copy. Dark by default; light follows the system. It runs the same <code>zorua</code> commands, is not installed by the installer, and is a separate process: Zorua itself still has no daemon.</p>
+  <p class="note" style="margin-top:10px">A local page for accounts, 5h/7d usage, providers and directory bindings: add, remove and sign in, and edit a provider's env variables, key and model list. Keys stay masked until you press show or copy. Dark by default; light follows the system. Press <code>⌘K</code> (or <code>/</code>) to jump to any account or provider, and <code>?</code> lists the single-key shortcuts. It runs the same <code>zorua</code> commands, is not installed by the installer, and is a separate process: Zorua itself still has no daemon.</p>
+
+  <figure class="shot" style="margin-top:14px"><img src="assets/dashboard-overview-dark.webp" width="2880" height="2000" loading="lazy" decoding="async" alt="The Zorua web dashboard in its dark theme: summary cards, a needs-attention strip, Codex and Claude Code accounts with 5-hour and 7-day usage bars, providers with check results, and directory bindings."></figure>
+  <div class="shots">
+    <figure class="shot" style="flex:1.44 1 0"><img src="assets/dashboard-overview-light.webp" width="2880" height="2000" loading="lazy" decoding="async" alt="The same overview in the light theme."></figure>
+    <figure class="shot" style="flex:1.17 1 0"><img src="assets/dashboard-palette.webp" width="1232" height="1050" loading="lazy" decoding="async" alt="The command palette: jump to an account or provider, add one, refresh, check all providers, copy a zorua use command, switch theme."></figure>
+    <figure class="shot tall" style="flex:.46 1 0"><img src="assets/dashboard-mobile.webp" width="780" height="1688" loading="lazy" decoding="async" alt="The dashboard on a narrow screen, with the sidebar behind a menu button."></figure>
+  </div>
+  <p class="note" style="margin-top:10px">Dark and light themes, the command palette, and the narrow-screen layout. The accounts and numbers in these screenshots are made up.</p>
 
   <footer><p class="fine">The name is a nod to the illusion fox of the Pokémon games, which takes on the appearance of other creatures; here every window shows up as a different account. The icon is an original drawing, not Pokémon artwork, and this is an independent project.</p>Formerly CodeX Switch · MIT · zsh, bash or fish · Python 3.8+ · works with the official Codex CLI and/or Claude Code · <code>zorua usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
 </main>
