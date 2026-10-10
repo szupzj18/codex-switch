@@ -389,13 +389,15 @@ def apply_binding(st, pwd):
 TITLES = {"codex": "Codex", "claude": "Claude Code"}
 
 
-def emit_json(all_acc, info, live, claude_age):
+def emit_json(all_acc, info, live, claude_age, claude_expired=None):
     """Machine-readable ls / usage for other front ends. Never includes tokens or provider keys."""
     accounts = []
     for n, h, k in all_acc:
         i = info[n]
         # relay: is the status-line relay installed (Claude accounts only; None for Codex)
+        # expired: cached windows whose reset time has passed (they have reset; the new usage is unknown)
         u = {"windows": [], "error": None, "age_seconds": claude_age.get(n),
+             "expired": (claude_expired or {}).get(n, []) if k == "claude" else None,
              "relay": hook_installed(n) if k == "claude" else None,
              "shadowed_by": [{"file": s["file"], "dir": s["dir"]} for s in shadow_files(n, False) if not s["relay"]] if k == "claude" else None}
         if n in live:
@@ -494,6 +496,7 @@ def render(online, verbose, expiry=False, as_json=False):
         return r
 
     claude_age = {}
+    claude_expired = {}
     info = {n: load(h) for n, h in accts if kind[n] == "codex"}
     with ThreadPoolExecutor(max_workers=8) as ex:
         cfuts = {n: ex.submit(load_claude, h) for n, h in accts if kind[n] == "claude"}
@@ -511,18 +514,21 @@ def render(online, verbose, expiry=False, as_json=False):
             if kind[n] != "claude":
                 continue
             c = claude_usage_cache(h) or {}
-            ws = []
+            ws, gone = [], []
             for key, secs in (("five_hour", 18000), ("seven_day", 604800)):
                 w = c.get(key)
                 if isinstance(w, dict) and w.get("resets_at") and w["resets_at"] > now:
                     ws.append({"limit_window_seconds": secs, "used_percent": int(round(float(w["used_percentage"]))),
                                "reset_after_seconds": int(w["resets_at"] - now)})
+                elif isinstance(w, dict) and w.get("resets_at"):
+                    gone.append({"window_seconds": secs, "reset_ago_seconds": int(now - w["resets_at"])})
+            claude_expired[n] = gone
             claude_age[n] = (int(now - c["updated_at"]) if c.get("updated_at") else None) if c else None
             if ws:
                 live[n] = ({"rate_limit": {"primary_window": ws[0], "secondary_window": ws[1] if len(ws) > 1 else None}}, None)
 
     if as_json:
-        emit_json(all_acc, info, live, claude_age)
+        emit_json(all_acc, info, live, claude_age, claude_expired)
         return
 
     def ago(secs):
@@ -693,6 +699,9 @@ def render(online, verbose, expiry=False, as_json=False):
                 continue
             if claude_age.get(n) is not None:
                 notes.append("%s: Claude usage as of %s ago (from its last session)" % (n, ago(claude_age[n])))
+                for g in claude_expired.get(n, []):
+                    notes.append("%s: the %s window reset %s ago; waiting for a new claude session to report it"
+                                 % (n, label(g["window_seconds"]), ago(g["reset_ago_seconds"])))
             elif [s for s in shadow_files(n, False) if not s["relay"]]:
                 s = [s for s in shadow_files(n, False) if not s["relay"]][0]
                 notes.append("%s: no Claude usage yet — %s hides the relay in %s; run 'zorua hook install %s --shadows'" % (n, s["file"], s["dir"], n))

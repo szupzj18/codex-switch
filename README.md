@@ -134,8 +134,9 @@ usage endpoint Codex uses). Claude Code publishes no usage API, but it passes th
 and weekly windows (`rate_limits`, claude.ai Pro and Max) to the account's *status-line*
 command. `zorua hook install alt` wraps that command in a small relay that saves the two
 windows to `<config dir>/.zorua-usage.json` and then runs your original command
-unchanged; `zorua usage` shows the cached values together with their age, and a window
-disappears once its reset time has passed. The relay reads no credentials and makes no
+unchanged; `zorua usage` shows the cached values together with their age. A window whose reset time
+has passed is no longer shown as a percentage (it has reset and the new usage is unknown):
+`zorua usage` says so, and `--json` lists it under `usage.expired`. The relay reads no credentials and makes no
 network calls. Data exists after the account has been used once with the relay installed.
 
 ```shell
