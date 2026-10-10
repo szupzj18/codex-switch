@@ -7,6 +7,7 @@ export const SHORTCUTS: [keys: string, what: string][] = [
   ["p", "Add a provider"],
   ["b", "Bind a directory"],
   ["t", "Switch theme: auto → light → dark"],
+  ["d", "Compact or comfortable rows"],
   ["?", "Show this list"],
   ["Esc", "Close a dialog or the palette"],
 ];

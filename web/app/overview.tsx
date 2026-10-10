@@ -103,7 +103,7 @@ function Attention({ items, onOpen }: { items: Item[]; onOpen: (v: View) => void
 }
 
 const AGENT_TONE: Record<Account["agent"], string> = { codex: "bg-info/15 text-info", claude: "bg-violet/15 text-violet" };
-const ROW = "grid grid-cols-1 gap-4 border-b border-line px-4 py-4 transition-colors last:border-b-0 hover:bg-panel-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]";
+const ROW = "row-pad grid grid-cols-1 gap-4 border-b border-line px-4 transition-colors last:border-b-0 hover:bg-panel-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]";
 
 function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () => void; onLogin: () => void; onRemove: () => void }) {
   const ws = a.usage.windows;
@@ -124,7 +124,7 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
           <div className="truncate text-xs text-dim" title={a.email ?? undefined}>
             {a.email ?? "—"}
           </div>
-          <div className="truncate font-mono text-[11px] text-dim/70" title={a.home}>
+          <div className="truncate font-mono text-[11px] text-dim" title={a.home}>
             {a.home}
           </div>
         </div>
@@ -189,7 +189,7 @@ function ProviderRow({ p, check, checking, onOpen, onCheck, onRemove }: { p: Pro
 
 function BindingRow({ b, onRemove }: { b: Binding; onRemove: () => void }) {
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3 transition-colors last:border-b-0 hover:bg-panel-2">
+    <li className="row-pad flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 transition-colors last:border-b-0 hover:bg-panel-2">
       <span className="min-w-0 flex-1 truncate font-mono text-[13px]" title={b.dir}>
         {b.dir}
       </span>

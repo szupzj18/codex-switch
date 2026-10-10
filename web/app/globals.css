@@ -66,6 +66,14 @@
   color-scheme: dark;
 }
 
+/* Vertical padding of an account, provider or binding row; `d` (or the palette) switches to compact. */
+.row-pad {
+  padding-block: 1rem;
+}
+:root[data-density="compact"] .row-pad {
+  padding-block: 0.5rem;
+}
+
 :root[data-theme="light"] {
   color-scheme: light;
   --color-bg: #f3f6f5;

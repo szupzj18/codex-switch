@@ -28,6 +28,21 @@ export function setThemeMode(m: Mode) {
   window.dispatchEvent(new Event(EVENT));
 }
 
+const DENSITY_KEY = "zorua-density";
+
+export const isCompact = () => document.documentElement.dataset.density === "compact";
+
+/** Compact rows (`d`): less vertical padding per account, provider and binding. Remembered like the theme. */
+export function toggleDensity() {
+  const compact = !isCompact();
+  if (compact) document.documentElement.dataset.density = "compact";
+  else document.documentElement.removeAttribute("data-density");
+  try {
+    if (compact) localStorage.setItem(DENSITY_KEY, "compact");
+    else localStorage.removeItem(DENSITY_KEY);
+  } catch {}
+}
+
 /** auto → light → dark → auto, for the `t` shortcut. */
 export function cycleTheme() {
   setThemeMode(MODES[(MODES.indexOf(readMode()) + 1) % MODES.length]);
