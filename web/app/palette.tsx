@@ -16,6 +16,23 @@ export type Command = {
   run: () => void;
 };
 
+const RECENT_KEY = "zorua-recent";
+
+function readRecent(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 3) : [];
+  } catch {
+    return [];
+  }
+}
+
+function remember(id: string) {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...readRecent().filter((x) => x !== id)].slice(0, 3)));
+  } catch {}
+}
+
 /** Every word typed must appear in the label, hint or keywords; a label that starts with the query ranks first. */
 function search(commands: Command[], q: string): Command[] {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -37,8 +54,15 @@ export function Palette({ commands, initial = "", onClose }: { commands: Command
   const [q, setQ] = useState(initial);
   const [active, setActive] = useState(0);
   const uid = useId();
-  const shown = useMemo(() => search(commands, q), [commands, q]);
+  const [recent] = useState(readRecent);
+  const shown = useMemo(() => {
+    if (q.trim()) return search(commands, q);
+    // With nothing typed, the last few commands you ran come first.
+    const again = recent.flatMap((id) => commands.filter((c) => c.id === id)).map((c) => ({ ...c, id: `recent:${c.id}`, group: "Recent" }));
+    return [...again, ...commands];
+  }, [commands, q, recent]);
   const current = Math.min(active, Math.max(0, shown.length - 1));
+  const count = shown.filter((c) => c.group !== "Recent").length; // a recent command is also listed in its own group
 
   useEffect(() => {
     const d = ref.current;
@@ -52,6 +76,7 @@ export function Palette({ commands, initial = "", onClose }: { commands: Command
   const run = (c: Command | undefined) => {
     if (!c) return;
     ref.current?.close();
+    remember(c.id.replace(/^recent:/, ""));
     c.run();
   };
 
@@ -131,7 +156,7 @@ export function Palette({ commands, initial = "", onClose }: { commands: Command
         <span>↑↓ select</span>
         <span>↵ run</span>
         <span>esc close</span>
-        <span className="ml-auto tabular-nums">{shown.length} {shown.length === 1 ? "result" : "results"}</span>
+        <span className="ml-auto tabular-nums">{count} {count === 1 ? "result" : "results"}</span>
       </div>
     </dialog>
   );

@@ -21,20 +21,27 @@ function Panel({ title, icon, count, action, children }: { title: string; icon: 
   );
 }
 
-function Stat({ label, value, sub, tone = "text-fg", children }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string; children?: React.ReactNode }) {
-  return (
-    <div className={`${card} p-4`}>
+function Stat({ label, value, sub, tone = "text-fg", onClick, hint, children }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string; onClick?: () => void; hint?: string; children?: React.ReactNode }) {
+  const body = (
+    <>
       <div className="text-[11px] font-medium uppercase tracking-wider text-dim">{label}</div>
       <div className={`mt-1.5 text-2xl font-semibold leading-none tracking-tight tabular-nums ${tone}`}>{value}</div>
       {children}
       {sub != null && <div className="mt-2 truncate text-xs text-dim">{sub}</div>}
-    </div>
+    </>
+  );
+  if (!onClick) return <div className={`${card} p-4`}>{body}</div>;
+  return (
+    <button type="button" onClick={onClick} title={hint} className={`${card} block w-full p-4 text-left transition-colors hover:border-accent`}>
+      {body}
+    </button>
   );
 }
 
-/** The numbers that answer "is anything wrong" before any row is read. */
-function Summary({ data, checks, items }: { data: ZoruaState; checks: Record<string, Check>; items: Item[] }) {
+/** The numbers that answer "is anything wrong" before any row is read; a tile that points at something opens it. */
+function Summary({ data, checks, checking, items, onOpen, onCheckAll }: { data: ZoruaState; checks: Record<string, Check>; checking: Set<string>; items: Item[]; onOpen: (v: View) => void; onCheckAll: () => void }) {
   const signedIn = data.accounts.filter((a) => a.state !== "none").length;
+  const signedOut = data.accounts.find((a) => a.state === "none");
   let top: { a: Account; p: number } | null = null;
   for (const a of data.accounts) {
     const p = peak(a);
@@ -43,11 +50,26 @@ function Summary({ data, checks, items }: { data: ZoruaState; checks: Record<str
   const results = data.providers.map((p) => checks[p.name]).filter(Boolean);
   const failed = results.filter((c) => c.status === "fail").length;
   const warned = results.filter((c) => c.status === "warn").length;
+  const badProvider = data.providers.find((p) => checks[p.name] && checks[p.name].status !== "ok");
   const worst = items[0]?.tone;
+  const unchecked = data.providers.length > 0 && results.length === 0;
   return (
     <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Stat label="Accounts" value={`${signedIn}/${data.accounts.length}`} sub="signed in" />
-      <Stat label="Highest usage" value={top ? `${top.p}%` : "—"} tone={top ? (top.p >= 50 ? textColor(top.p) : "text-fg") : "text-dim"} sub={top ? top.a.name : "no usage data yet"}>
+      <Stat
+        label="Accounts"
+        value={`${signedIn}/${data.accounts.length}`}
+        sub={signedOut ? `${data.accounts.length - signedIn} not signed in` : "all signed in"}
+        onClick={signedOut ? () => onOpen({ kind: "account", name: signedOut.name }) : undefined}
+        hint={signedOut ? `Open ${signedOut.name}` : undefined}
+      />
+      <Stat
+        label="Highest usage"
+        value={top ? `${top.p}%` : "—"}
+        tone={top ? (top.p >= 50 ? textColor(top.p) : "text-fg") : "text-dim"}
+        sub={top ? top.a.name : "no usage data yet"}
+        onClick={top ? () => onOpen({ kind: "account", name: top.a.name }) : undefined}
+        hint={top ? `Open ${top.a.name}` : undefined}
+      >
         {top && (
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line" aria-hidden>
             <div className={`h-full rounded-full ${barColor(top.p)}`} style={{ width: `${top.p}%` }} />
@@ -58,13 +80,27 @@ function Summary({ data, checks, items }: { data: ZoruaState; checks: Record<str
         label="Providers"
         value={data.providers.length}
         tone={failed ? "text-danger" : warned ? "text-warn" : "text-fg"}
-        sub={results.length === 0 ? "not checked yet" : failed || warned ? `${failed} failed · ${warned} warning` : `${results.length} checked, all ok`}
+        sub={
+          checking.size > 0
+            ? "checking…"
+            : unchecked
+              ? "not checked · check all"
+              : results.length === 0
+                ? "none yet"
+                : failed || warned
+                  ? `${failed} failed · ${warned} warning`
+                  : `${results.length} checked, all ok`
+        }
+        onClick={checking.size > 0 ? undefined : unchecked ? onCheckAll : badProvider ? () => onOpen({ kind: "provider", name: badProvider.name }) : undefined}
+        hint={unchecked ? "Check every provider" : badProvider ? `Open ${badProvider.name}` : undefined}
       />
       <Stat
         label="Needs attention"
         value={items.length}
         tone={worst === "danger" ? "text-danger" : worst === "warn" ? "text-warn" : items.length ? "text-fg" : "text-accent"}
         sub={items.length ? items[0].text : "all clear"}
+        onClick={items.length ? () => onOpen(items[0].to) : undefined}
+        hint={items.length ? "Open the most urgent item" : undefined}
       />
     </div>
   );
@@ -242,7 +278,7 @@ export function Overview({
   const items = attention(data, checks);
   return (
     <>
-      <Summary data={data} checks={checks} items={items} />
+      <Summary data={data} checks={checks} checking={checking} items={items} onOpen={onOpen} onCheckAll={onCheckAll} />
       <Attention items={items} onOpen={onOpen} />
       <div className="grid gap-x-6 gap-y-8 xl:grid-cols-2">
         <Panel title="Codex" icon="user" count={codex.length}>
