@@ -109,7 +109,7 @@ jobs:
       - name: Demo build
         run: sh demo/build.sh "$RUNNER_TEMP/zorua-demo"
 
-      # Only a warning: docs/demo is committed (GitHub Pages serves docs/) and has to be rebuilt by hand.
+      # docs/demo is committed (GitHub Pages serves docs/) and has to be rebuilt by hand: fail when it is behind.
       - name: Is docs/demo up to date?
         run: sh demo/check-fresh.sh "$RUNNER_TEMP/zorua-demo"
 

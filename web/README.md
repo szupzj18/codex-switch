@@ -63,7 +63,7 @@ npm ci
 sh demo/build.sh          # writes ../docs/demo (GitHub Pages serves docs/); or pass another directory
 ```
 
-The build runs on a copy in `web/.demo-build` without `app/api` and with `demo/overlay` on top, so the real app is not changed. CI builds the demo on every change to keep it compiling. `docs/demo/` is committed, so rebuild it when the dashboard changes. Set `ZORUA_DEMO_BASE` if the demo is served from another path (default `/zorua/demo`).
+The build runs on a copy in `web/.demo-build` without `app/api` and with `demo/overlay` on top, so the real app is not changed. CI builds the demo on every change and fails when `docs/demo/` is older than the dashboard. `docs/demo/` is committed, so rebuild it and commit it whenever the dashboard changes. Set `ZORUA_DEMO_BASE` if the demo is served from another path (default `/zorua/demo`).
 
 ## Keep it running (macOS)
 
