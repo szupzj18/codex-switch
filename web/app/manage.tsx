@@ -20,14 +20,20 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const d = ref.current;
-    if (d && !d.open) d.showModal();
+    if (!d || d.open) return;
+    d.showModal();
+    // showModal() starts on the first focusable thing, the close button, and React's autoFocus has no
+    // effect inside a closed dialog. Start on the first text field; a dialog without one, on itself.
+    const first = d.querySelector<HTMLElement>("input:not([type=checkbox]):not([type=radio]):not([type=hidden]), textarea");
+    (first ?? d).focus();
   }, []);
   return (
     <dialog
       ref={ref}
       onClose={onClose}
       onClick={(e) => e.target === ref.current && ref.current?.close()}
-      className="m-auto max-h-[90vh] w-[min(92vw,30rem)] rounded-2xl border border-line-strong bg-panel p-0 text-fg shadow-pop backdrop:bg-black/60 backdrop:backdrop-blur-sm open:animate-pop"
+      tabIndex={-1}
+      className="m-auto max-h-[90vh] w-[min(92vw,30rem)] outline-none rounded-2xl border border-line-strong bg-panel p-0 text-fg shadow-pop backdrop:bg-black/60 backdrop:backdrop-blur-sm open:animate-pop"
     >
       <div className="p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -47,7 +53,7 @@ function Labeled({ label, hint, children }: { label: string; hint?: string; chil
     <label className="mb-3 block text-xs text-dim">
       <span className="mb-1 block">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-[11px] text-dim/70">{hint}</span>}
+      {hint && <span className="mt-1 block text-[11px] text-dim">{hint}</span>}
     </label>
   );
 }
@@ -204,7 +210,7 @@ export function RemoveAccountForm({ name, home, canPurge, onDone, onCancel }: { 
           <span>also delete the data directory (sign-in, history). This cannot be undone.</span>
         </label>
       ) : (
-        <p className="mb-3 text-[11px] text-dim/70">This directory was not created by Zorua, so it can only be unregistered here.</p>
+        <p className="mb-3 text-[11px] text-dim">This directory was not created by Zorua, so it can only be unregistered here.</p>
       )}
       {purge && (
         <Labeled label={`type "${name}" to confirm`}>

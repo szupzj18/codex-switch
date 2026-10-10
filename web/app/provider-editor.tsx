@@ -116,7 +116,7 @@ function Labeled({ label, hint, children }: { label: string; hint?: string; chil
       <span className="py-1">{label}</span>
       <span>
         {children}
-        {hint && <span className="mt-1 block text-[11px] text-dim/70">{hint}</span>}
+        {hint && <span className="mt-1 block text-[11px] text-dim">{hint}</span>}
       </span>
     </label>
   );
@@ -378,7 +378,7 @@ export function ProviderPage({
                   <CopyButton label="copy key" get={() => copyValue(get(keyVar), base.agent === "claude" ? base.env[keyVar] : undefined, (d) => (d.agent === "claude" ? d.env[keyVar] : undefined))} />
                 </span>
               </Labeled>
-              <div className="mt-1 border-t border-line pt-3 text-[11px] text-dim/70">Models Claude Code asks for; leave a line empty to use its default.</div>
+              <div className="mt-1 border-t border-line pt-3 text-[11px] text-dim">Models Claude Code asks for; leave a line empty to use its default.</div>
               {ROLES.map(([v, label]) => (
                 <Labeled key={v} label={label} hint={v}>
                   <ModelInput label={label} listId="model-ids" value={get(v)} onChange={(x) => setVar(v, x, true)} />

@@ -13,7 +13,7 @@ import { type Command, Palette } from "./palette";
 import { ProviderPage } from "./provider-editor";
 import { Sidebar } from "./sidebar";
 import { SHORTCUTS } from "./shortcuts";
-import { cycleTheme, setThemeMode } from "./theme";
+import { cycleTheme, isCompact, setThemeMode, toggleDensity } from "./theme";
 import { alertDanger, ghostBtn, outlineBtn, primaryBtn } from "./ui";
 import { peak } from "./usage";
 import { formatHash, parseHash, type View } from "./view";
@@ -166,6 +166,7 @@ export default function Dashboard() {
       else if (k === "p") setDialog({ kind: "provider" });
       else if (k === "b") setDialog({ kind: "binding" });
       else if (k === "t") cycleTheme();
+      else if (k === "d") toggleDensity();
       else if (k === "?") setDialog({ kind: "help" });
       else if (sequence) go({ kind: "overview" });
       else return;
@@ -260,6 +261,7 @@ export default function Dashboard() {
       out.push({ id: `copy:${n}`, group: "Copy command", label: `zorua use ${n}`, icon: "copy", hint: "copy command", run: () => void copy(`zorua use ${n}`) });
     }
     out.push(
+      { id: "act:density", group: "Actions", label: isCompact() ? "Comfortable rows" : "Compact rows", icon: "grid", shortcut: "d", keywords: "density spacing", run: toggleDensity },
       { id: "act:help", group: "Actions", label: "Keyboard shortcuts", icon: "search", shortcut: "?", run: () => setDialog({ kind: "help" }) },
       { id: "theme:auto", group: "Theme", label: "Match system", icon: "monitor", keywords: "auto theme", run: () => setThemeMode("auto") },
       { id: "theme:light", group: "Theme", label: "Light", icon: "sun", keywords: "theme", run: () => setThemeMode("light") },
@@ -272,7 +274,7 @@ export default function Dashboard() {
     <div className="mx-auto grid max-w-[1800px] gap-6 px-4 pb-16 pt-4 lg:grid-cols-[15.5rem_minmax(0,1fr)] lg:px-6">
       <Sidebar data={data} view={view} items={items} onGo={go} onSearch={() => setPalette({ initial: "" })} open={navOpen} onClose={() => setNavOpen(false)} />
 
-      <main className="min-w-0">
+      <main id="main" tabIndex={-1} className="min-w-0 outline-none">
         <header className="sticky top-0 z-20 -mx-4 flex flex-wrap items-center gap-x-3 gap-y-3 border-b border-line bg-bg/80 px-4 py-3 backdrop-blur-md lg:-mx-6 lg:px-6">
           <button type="button" onClick={() => setNavOpen(true)} aria-label="Open menu" className="rounded-lg border border-line-strong p-2 text-dim hover:text-fg lg:hidden">
             <Icon name="menu" />
@@ -302,10 +304,17 @@ export default function Dashboard() {
         </header>
 
         <p className="mt-4 flex items-center gap-2 text-xs text-dim" aria-live="polite">
-          <span className={`size-1.5 rounded-full ${res ? (res.stale || loading ? "animate-pulse bg-warn" : "bg-accent") : "animate-pulse bg-dim"}`} aria-hidden />
-          {res ? `updated ${new Date(res.data.generated_at * 1000).toLocaleTimeString()}${res.stale ? " · refreshing" : ""}` : "reading accounts…"}
+          <span className={`size-1.5 rounded-full ${res ? (res.stale || loading ? "animate-pulse bg-warn" : "bg-accent") : err ? "bg-danger" : "animate-pulse bg-dim"}`} aria-hidden />
+          {res ? `updated ${new Date(res.data.generated_at * 1000).toLocaleTimeString()}${res.stale ? " · refreshing" : ""}` : err ? "could not read accounts" : "reading accounts…"}
         </p>
-        {(err || res?.error) && <p className={`mt-3 ${alertDanger}`}>{err ?? res?.error}</p>}
+        {(err || res?.error) && (
+          <p className={`mt-3 flex items-center gap-3 ${alertDanger}`} role="alert">
+            <span className="min-w-0 flex-1 break-words">{err ?? res?.error}</span>
+            <button type="button" onClick={() => load(true)} disabled={loading} className="shrink-0 rounded-lg border border-danger/50 px-2.5 py-1 font-medium hover:bg-danger/10 disabled:opacity-50">
+              retry
+            </button>
+          </p>
+        )}
         {loginFor && <LoginBanner name={loginFor} onFinished={onLoginFinished} />}
 
         <div className="mt-6">
