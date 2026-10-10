@@ -42,6 +42,18 @@ npm start            # http://127.0.0.1:4747
 
 `npm run dev` starts the development server on the same port. Set `ZORUA_CORE` to use another `zorua_core.py`.
 
+## Live demo
+
+The landing page embeds the dashboard running on made-up data, with no server: the same app, exported as static files, where `/api/*` is answered in the browser from an in-memory copy of some example accounts (`demo/overlay/app/demo.tsx`). Nothing is sent anywhere and a reload starts over.
+
+```sh
+cd web
+npm ci
+sh demo/build.sh          # writes ../docs/demo (GitHub Pages serves docs/); or pass another directory
+```
+
+The build runs on a copy in `web/.demo-build` without `app/api` and with `demo/overlay` on top, so the real app is not changed. CI builds the demo on every change to keep it compiling. `docs/demo/` is committed, so rebuild it when the dashboard changes. Set `ZORUA_DEMO_BASE` if the demo is served from another path (default `/zorua/demo`).
+
 ## Keep it running (macOS)
 
 ```sh

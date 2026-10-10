@@ -62,10 +62,14 @@ td:last-child{color:var(--dim)}
 .tw{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
 .tw tr:last-child td{border-bottom:0}
 footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
-.shot{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);min-width:0}
-.shot img{display:block;width:100%;height:auto}
-.shots{display:flex;gap:12px;align-items:flex-start;margin-top:12px}
-@media(max-width:640px){.shots{flex-direction:column}.shots .shot{flex:none!important;width:100%}.shots .shot.tall{width:62%}}
+.live{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.live .bar .r{margin-left:auto;color:var(--g)}
+.stage{position:relative;aspect-ratio:2880/2000;background:#090c0b;overflow:hidden}
+.stage img{position:absolute;inset:0;width:100%;height:100%;display:block}
+.stage iframe{position:absolute;left:0;top:0;width:1280px;height:889px;border:0;transform-origin:0 0;background:#090c0b;opacity:0;transition:opacity .25s}
+.stage iframe.on{opacity:1}
+@media(max-width:700px){.stage{aspect-ratio:auto;height:640px}.stage img{display:none}.stage iframe{width:100%;height:100%;transform:none!important}}
+@media(prefers-reduced-motion:reduce){.stage iframe{transition:none}}
 .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:0 9px;font-size:.74rem;color:var(--dim);margin-left:6px;vertical-align:middle}
 </style>
 </head>
@@ -159,13 +163,14 @@ footer .fine{font-size:.76rem;opacity:.8;margin:0 0 10px}
 <span class="d">http://127.0.0.1:4747  (loopback only)</span></pre></div>
   <p class="note" style="margin-top:10px">A local page for accounts, 5h/7d usage, providers and directory bindings: add, remove and sign in, and edit a provider's env variables, key and model list. Keys stay masked until you press show or copy. Dark by default; light follows the system. Press <code>⌘K</code> (or <code>/</code>) to jump to any account or provider, and <code>?</code> lists the single-key shortcuts. It runs the same <code>zorua</code> commands, is not installed by the installer, and is a separate process: Zorua itself still has no daemon.</p>
 
-  <figure class="shot" style="margin-top:14px"><img src="assets/dashboard-overview-dark.webp" width="2880" height="2000" loading="lazy" decoding="async" alt="The Zorua web dashboard in its dark theme: summary cards, a needs-attention strip, Codex and Claude Code accounts with 5-hour and 7-day usage bars, providers with check results, and directory bindings."></figure>
-  <div class="shots">
-    <figure class="shot" style="flex:1.44 1 0"><img src="assets/dashboard-overview-light.webp" width="2880" height="2000" loading="lazy" decoding="async" alt="The same overview in the light theme."></figure>
-    <figure class="shot" style="flex:1.17 1 0"><img src="assets/dashboard-palette.webp" width="1232" height="1050" loading="lazy" decoding="async" alt="The command palette: jump to an account or provider, add one, refresh, check all providers, copy a zorua use command, switch theme."></figure>
-    <figure class="shot tall" style="flex:.46 1 0"><img src="assets/dashboard-mobile.webp" width="780" height="1688" loading="lazy" decoding="async" alt="The dashboard on a narrow screen, with the sidebar behind a menu button."></figure>
+  <div class="live" style="margin-top:14px">
+    <div class="bar"><i></i><i></i><i></i><b>zorua web dashboard</b><span class="r">live demo · made-up data</span></div>
+    <div class="stage" id="stage">
+      <img src="assets/dashboard-overview-dark.webp" width="2880" height="2000" loading="lazy" decoding="async" alt="The Zorua web dashboard in its dark theme: summary cards, a needs-attention strip, Codex and Claude Code accounts with 5-hour and 7-day usage bars, providers with check results, and directory bindings.">
+      <iframe id="demo" data-src="demo/" title="Zorua web dashboard, live demo with made-up data" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals" allow="clipboard-write"></iframe>
+    </div>
   </div>
-  <p class="note" style="margin-top:10px">Dark and light themes, the command palette, and the narrow-screen layout. The accounts and numbers in these screenshots are made up.</p>
+  <p class="note" style="margin-top:10px">The real dashboard, running in your browser on made-up data: click around, press <code>⌘K</code>, switch the theme. Nothing leaves this page, and a reload starts over. <a href="demo/" target="_blank" rel="noopener">Open it full size</a>.</p>
 
   <footer><p class="fine">The name is a nod to the illusion fox of the Pokémon games, which takes on the appearance of other creatures; here every window shows up as a different account. The icon is an original drawing, not Pokémon artwork, and this is an independent project.</p>Formerly CodeX Switch · MIT · zsh, bash or fish · Python 3.8+ · works with the official Codex CLI and/or Claude Code · <code>zorua usage</code> sends each account's own token to chatgpt.com (same endpoint Codex uses), never printed.</footer>
 </main>
@@ -193,5 +198,10 @@ tabs.forEach(function(b,i){b.addEventListener('click',function(){show(i)})});
 show(0);
 })();
 </script>
+<script>(function(){var st=document.getElementById('stage'),f=document.getElementById('demo');if(!st||!f)return;
+function fit(){f.style.transform=window.innerWidth<=700?'':'scale('+st.clientWidth/1280+')'}
+fit();window.addEventListener('resize',fit);
+function go(){if(f.getAttribute('src'))return;f.addEventListener('load',function(){f.classList.add('on')});f.src=f.dataset.src}
+if('IntersectionObserver' in window){new IntersectionObserver(function(e,o){if(e[0].isIntersecting){go();o.disconnect()}},{rootMargin:'300px'}).observe(st)}else{go()}})();</script>
 </body>
 </html>

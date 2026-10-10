@@ -99,6 +99,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Demo build
+        run: sh demo/build.sh "$RUNNER_TEMP/zorua-demo"
+
       - name: API tests
         run: npm test
 
