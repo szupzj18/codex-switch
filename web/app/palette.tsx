@@ -123,7 +123,7 @@ export function Palette({ commands, initial = "", onClose }: { commands: Command
           spellCheck={false}
           autoComplete="off"
         />
-        <kbd className="rounded border border-line-strong px-1.5 py-px text-[10px] text-dim">esc</kbd>
+        <kbd className="rounded border border-line-strong px-1.5 py-px text-[11px] text-dim">esc</kbd>
       </div>
       <div ref={list} id={`${uid}-list`} role="listbox" className="max-h-[min(24rem,52vh)] overflow-y-auto p-2">
         {shown.length === 0 && <p className="px-3 py-8 text-center text-xs text-dim">Nothing matches “{q}”.</p>}
@@ -132,7 +132,7 @@ export function Palette({ commands, initial = "", onClose }: { commands: Command
           lastGroup = c.group;
           return (
             <div key={c.id}>
-              {header && <div className="px-3 pb-1 pt-2.5 text-[11px] font-medium uppercase tracking-wider text-dim">{c.group}</div>}
+              {header && <div className="px-3 pb-1 pt-2.5 text-xs font-medium uppercase tracking-wider text-dim">{c.group}</div>}
               <div
                 id={`${uid}-${i}`}
                 data-index={i}
@@ -145,14 +145,14 @@ export function Palette({ commands, initial = "", onClose }: { commands: Command
                 {c.icon && <Icon name={c.icon} className={i === current ? "" : "text-dim"} />}
                 <span className="min-w-0 flex-1 truncate">{c.label}</span>
                 {c.hint && <span className="truncate text-xs text-dim">{c.hint}</span>}
-                {c.shortcut && <kbd className="rounded border border-line-strong px-1.5 py-px font-mono text-[10px] text-dim">{c.shortcut}</kbd>}
+                {c.shortcut && <kbd className="rounded border border-line-strong px-1.5 py-px font-mono text-[11px] text-dim">{c.shortcut}</kbd>}
                 {i === current && <Icon name="enter" className="size-3.5" />}
               </div>
             </div>
           );
         })}
       </div>
-      <div className="flex gap-4 border-t border-line px-4 py-2 text-[11px] text-dim">
+      <div className="flex gap-4 border-t border-line px-4 py-2 text-xs text-dim">
         <span>↑↓ select</span>
         <span>↵ run</span>
         <span>esc close</span>

@@ -62,7 +62,7 @@ export function Bar({ w }: { w: UsageWindow }) {
   return (
     <div className="min-w-0">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="rounded bg-line px-1.5 py-px font-mono text-[10px] font-medium tracking-wide text-dim">{windowLabel(w.window_seconds)}</span>
+        <span className="rounded bg-line px-1.5 py-px font-mono text-[11px] font-medium tracking-wide text-dim">{windowLabel(w.window_seconds)}</span>
         <span className={`text-sm font-semibold tabular-nums ${p >= 50 ? textColor(p) : ""}`}>{p}%</span>
       </div>
       <div
@@ -75,7 +75,7 @@ export function Bar({ w }: { w: UsageWindow }) {
       >
         <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(p)}`} style={{ width: `${p}%` }} />
       </div>
-      {w.reset_after_seconds != null && <div className="mt-1.5 text-[11px] text-dim">resets in {span(w.reset_after_seconds)}</div>}
+      {w.reset_after_seconds != null && <div className="mt-1.5 text-xs text-dim">resets in {span(w.reset_after_seconds)}</div>}
     </div>
   );
 }
@@ -92,7 +92,7 @@ function Expired({ window_seconds, reset_ago_seconds }: { window_seconds: number
         <span className="text-dim">–</span>
       </div>
       <div className="mt-1 h-1.5 rounded-full border border-dashed border-dim/40" aria-hidden />
-      <div className="mt-1 text-[11px] text-dim">reset {ago(reset_ago_seconds)}, new usage unknown</div>
+      <div className="mt-1 text-xs text-dim">reset {ago(reset_ago_seconds)}, new usage unknown</div>
     </div>
   );
 }
@@ -120,13 +120,13 @@ export function UsagePanel({ a, roomy = false }: { a: Account; roomy?: boolean }
         note && <div className="text-xs text-dim">{note}</div>
       )}
       {ws.length + expired.length > 0 && age != null && (
-        <div className={`${top} text-[11px] ${age >= STALE_SECONDS ? "text-warn" : "text-dim"}`}>
+        <div className={`${top} text-xs ${age >= STALE_SECONDS ? "text-warn" : "text-dim"}`}>
           from its last session, {ago(age)}
           {age >= STALE_SECONDS && " — no session is open to refresh it"}
         </div>
       )}
-      {expired.length > 0 && ws.length === 0 && (age == null || age < STALE_SECONDS) && <div className="mt-1 text-[11px] text-dim">waiting for a new claude session to report the new window</div>}
-      {ws.length + expired.length > 0 && note && <div className="mt-2 text-[11px] text-danger">{note}</div>}
+      {expired.length > 0 && ws.length === 0 && (age == null || age < STALE_SECONDS) && <div className="mt-1 text-xs text-dim">waiting for a new claude session to report the new window</div>}
+      {ws.length + expired.length > 0 && note && <div className="mt-2 text-xs text-danger">{note}</div>}
     </div>
   );
 }

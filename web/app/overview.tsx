@@ -24,7 +24,7 @@ function Panel({ title, icon, count, action, children }: { title: string; icon: 
 function Stat({ label, value, sub, tone = "text-fg", onClick, hint, children }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string; onClick?: () => void; hint?: string; children?: React.ReactNode }) {
   const body = (
     <>
-      <div className="text-[11px] font-medium uppercase tracking-wider text-dim">{label}</div>
+      <div className="text-xs font-medium uppercase tracking-wider text-dim">{label}</div>
       <div className={`mt-1.5 text-2xl font-semibold leading-none tracking-tight tabular-nums ${tone}`}>{value}</div>
       {children}
       {sub != null && <div className="mt-2 truncate text-xs text-dim">{sub}</div>}
@@ -153,12 +153,12 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
             <button type="button" onClick={onOpen} className="font-semibold hover:text-accent">
               {a.name}
             </button>
-            {a.plan && <span className={`rounded-full bg-line px-2 py-px text-[11px] font-medium ${PLAN_STYLE[a.plan] ?? "text-fg"}`}>{a.plan}</span>}
+            {a.plan && <span className={`rounded-full bg-panel-2 px-2 py-px text-xs font-medium ring-1 ring-inset ring-line-strong ${PLAN_STYLE[a.plan] ?? "text-fg"}`}>{a.plan}</span>}
           </div>
           <div className="truncate text-xs text-dim" title={a.email ?? undefined}>
             {a.email ?? "—"}
           </div>
-          <div className="truncate font-mono text-[11px] text-dim" title={a.home}>
+          <div className="truncate font-mono text-xs text-dim" title={a.home}>
             {a.home}
           </div>
         </div>
@@ -168,7 +168,7 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
         <button type="button" onClick={onLogin} className={actionBtn}>
           sign in
         </button>
-        <CopyButton variant="action" text="copy command" label={`copy: zorua use ${a.name}`} get={async () => `zorua use ${a.name}`} />
+        <CopyButton variant="action" text="copy command" label={`zorua use ${a.name}`} get={async () => `zorua use ${a.name}`} />
         {a.name !== "default" && (
           <button type="button" onClick={onRemove} className={dangerBtn}>
             remove
@@ -187,7 +187,7 @@ function ProviderRow({ p, check, checking, onOpen, onCheck, onRemove }: { p: Pro
         <button type="button" onClick={onOpen} className="font-semibold hover:text-accent">
           {p.name}
         </button>
-        <span className="ml-2 rounded-full bg-line px-2 py-px text-[11px] text-dim">{p.agent}</span>
+        <span className="ml-2 rounded-full bg-line px-2 py-px text-xs text-dim">{p.agent}</span>
         <div className="truncate font-mono text-xs text-dim">{p.endpoint}</div>
       </div>
       <div className="min-w-0 text-xs text-dim">
@@ -200,7 +200,7 @@ function ProviderRow({ p, check, checking, onOpen, onCheck, onRemove }: { p: Pro
         <button type="button" onClick={onOpen} className={actionBtn}>
           view &amp; edit
         </button>
-        <CopyButton variant="action" text="copy command" label={`copy: zorua use ${p.name}`} get={async () => `zorua use ${p.name}`} />
+        <CopyButton variant="action" text="copy command" label={`zorua use ${p.name}`} get={async () => `zorua use ${p.name}`} />
         <button type="button" onClick={onRemove} className={dangerBtn}>
           remove
         </button>
@@ -216,7 +216,7 @@ function BindingRow({ b, onRemove }: { b: Binding; onRemove: () => void }) {
         {b.dir}
       </span>
       <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">→ {b.name}</span>
-      <CopyButton variant="action" text="copy command" label={`copy: zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
+      <CopyButton variant="action" text="copy command" label={`zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
       <button type="button" onClick={onRemove} className={dangerBtn}>
         unbind
       </button>

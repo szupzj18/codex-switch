@@ -116,7 +116,7 @@ function Labeled({ label, hint, children }: { label: string; hint?: string; chil
       <span className="py-1">{label}</span>
       <span>
         {children}
-        {hint && <span className="mt-1 block text-[11px] text-dim">{hint}</span>}
+        {hint && <span className="mt-1 block text-xs text-dim">{hint}</span>}
       </span>
     </label>
   );
@@ -349,7 +349,7 @@ export function ProviderPage({
         </span>
         <CheckBadge check={check} checking={checking} onCheck={onCheck} />
         <span className="ml-auto flex flex-wrap items-center gap-2">
-          <CopyButton variant="action" text="copy command" label={`copy: zorua use ${name}`} get={async () => `zorua use ${name}`} />
+          <CopyButton variant="action" text="copy command" label={`zorua use ${name}`} get={async () => `zorua use ${name}`} />
           <button type="button" className={actionBtn} onClick={toggleReveal}>
             {revealed ? "hide keys" : "show keys"}
           </button>
@@ -389,7 +389,7 @@ export function ProviderPage({
                   <CopyButton label="copy key" get={() => copyValue(get(keyVar), base.agent === "claude" ? base.env[keyVar] : undefined, (d) => (d.agent === "claude" ? d.env[keyVar] : undefined))} />
                 </span>
               </Labeled>
-              <div className="mt-1 border-t border-line pt-3 text-[11px] text-dim">Models Claude Code asks for; leave a line empty to use its default.</div>
+              <div className="mt-1 border-t border-line pt-3 text-xs text-dim">Models Claude Code asks for; leave a line empty to use its default.</div>
               {ROLES.map(([v, label]) => (
                 <Labeled key={v} label={label} hint={v}>
                   <ModelInput label={label} listId="model-ids" value={get(v)} onChange={(x) => setVar(v, x, true)} />
@@ -461,7 +461,7 @@ export function ProviderPage({
         )}
         <details className="border-t border-line">
           <summary className="cursor-pointer px-4 py-2.5 text-xs text-dim hover:text-fg">JSON</summary>
-          <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-all px-4 pb-4 text-[11px] text-dim">{built.doc ? JSON.stringify(built.doc, null, 2) : built.problem}</pre>
+          <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-all px-4 pb-4 text-xs text-dim">{built.doc ? JSON.stringify(built.doc, null, 2) : built.problem}</pre>
         </details>
       </div>
     </form>
