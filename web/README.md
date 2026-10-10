@@ -42,6 +42,17 @@ npm start            # http://127.0.0.1:4747
 
 `npm run dev` starts the development server on the same port. Set `ZORUA_CORE` to use another `zorua_core.py`.
 
+## Tests
+
+```sh
+npm run typecheck
+npm run build
+npm test            # API tests: the built server, fake claude/codex CLIs, an isolated HOME
+npm run test:ui     # browser tests: the built server on a fake core (tests/ui/fixture_core.py), driven by Chrome
+```
+
+`test:ui` needs a Chrome (set `CHROME_PATH`, or it looks in the usual places); without one it is skipped locally and fails in CI. It starts its own server on port 4949 (`ZW_UI_PORT`).
+
 ## Live demo
 
 The landing page embeds the dashboard running on made-up data, with no server: the same app, exported as static files, where `/api/*` is answered in the browser from an in-memory copy of some example accounts (`demo/overlay/app/demo.tsx`). Nothing is sent anywhere and a reload starts over.

@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { forget } from "./checks";
 import { cancelLogin, startLogin } from "./jobs";
-import type { LoginJob } from "./types";
+import type { LoginJob, ZoruaState } from "./types";
 import { invalidate, readRegistry, runCore, ZoruaError } from "./zorua";
 
 export class BadRequest extends Error {}
@@ -62,7 +62,9 @@ function purgeable(home: string): boolean {
 export async function perform(input: unknown): Promise<ActionResult> {
   if (typeof input !== "object" || input === null) throw new BadRequest("invalid request");
   const b = input as Record<string, unknown>;
-  const reg = await readRegistry();
+  // Read lazily: only the actions that look something up pay for the extra process.
+  let loaded: Promise<ZoruaState> | undefined;
+  const registry = () => (loaded ??= readRegistry());
   const run = async (args: string[], extra: Parameters<typeof runCore>[1] = {}) => {
     try {
       await runCore(args, { timeout: 30_000, ...extra });
@@ -81,7 +83,7 @@ export async function perform(input: unknown): Promise<ActionResult> {
     }
     case "account.login": {
       const n = name(b.name);
-      if (!reg.accounts.some((x) => x.name === n)) throw new BadRequest(`unknown account '${n}'`);
+      if (!(await registry()).accounts.some((x) => x.name === n)) throw new BadRequest(`unknown account '${n}'`);
       return { ok: true, message: `sign-in started for ${n}`, job: startLogin(n) };
     }
     case "account.login.cancel": {
@@ -91,7 +93,7 @@ export async function perform(input: unknown): Promise<ActionResult> {
     case "account.remove": {
       const n = name(b.name);
       if (n === "default") throw new BadRequest("default is built-in and cannot be removed");
-      const acc = reg.accounts.find((x) => x.name === n);
+      const acc = (await registry()).accounts.find((x) => x.name === n);
       if (!acc) throw new BadRequest(`unknown account '${n}'`);
       const purge = b.purge === true;
       if (purge) {
@@ -123,7 +125,7 @@ export async function perform(input: unknown): Promise<ActionResult> {
     }
     case "provider.save": {
       const n = name(b.name);
-      if (!reg.providers.some((p) => p.name === n)) throw new BadRequest(`unknown provider '${n}'`);
+      if (!(await registry()).providers.some((p) => p.name === n)) throw new BadRequest(`unknown provider '${n}'`);
       if (typeof b.doc !== "object" || b.doc === null || Array.isArray(b.doc)) throw new BadRequest("doc must be an object");
       const input = JSON.stringify(b.doc);
       if (input.length > 200_000) throw new BadRequest("document is too large");
@@ -133,7 +135,7 @@ export async function perform(input: unknown): Promise<ActionResult> {
     }
     case "provider.remove": {
       const n = name(b.name);
-      if (!reg.providers.some((p) => p.name === n)) throw new BadRequest(`unknown provider '${n}'`);
+      if (!(await registry()).providers.some((p) => p.name === n)) throw new BadRequest(`unknown provider '${n}'`);
       await run(["provider", "rm", n]);
       forget(n);
       return { ok: true, message: `removed provider ${n}` };
@@ -141,7 +143,7 @@ export async function perform(input: unknown): Promise<ActionResult> {
     case "binding.add": {
       const n = name(b.name);
       const dir = await directory(b.dir);
-      if (!reg.accounts.some((x) => x.name === n) && !reg.providers.some((p) => p.name === n)) {
+      if (!(await registry()).accounts.some((x) => x.name === n) && !(await registry()).providers.some((p) => p.name === n)) {
         throw new BadRequest(`unknown account or provider '${n}'`);
       }
       await run(["bind", n], { cwd: dir });
@@ -149,7 +151,7 @@ export async function perform(input: unknown): Promise<ActionResult> {
     }
     case "binding.remove": {
       const dir = str(b.dir, "directory", 1000);
-      if (!reg.bindings.some((x) => x.dir === dir)) throw new BadRequest("no such binding");
+      if (!(await registry()).bindings.some((x) => x.dir === dir)) throw new BadRequest("no such binding");
       await run(["unbind", dir]);
       return { ok: true, message: `unbound ${dir}` };
     }

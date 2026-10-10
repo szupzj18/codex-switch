@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 4747",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "sh tests/run.sh"
+    "test": "sh tests/run.sh",
+    "test:ui": "node tests/ui/run.mjs"
   },
   "dependencies": {
     "next": "16.4.0",
@@ -19,7 +20,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "puppeteer-core": "^23.11.1",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
