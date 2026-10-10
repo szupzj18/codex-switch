@@ -274,6 +274,33 @@ try {
     await p.close();
   }
 
+  // Text size: the root is 14px, so rem-based steps are smaller than they look (text-xs was 10.5px).
+  for (const [name, size] of [["desktop", [1280, 900]], ["phone", [390, 844]]]) {
+    const p = await open();
+    await p.setViewport({ width: size[0], height: size[1] });
+    await p.goto(BASE + "/#/", { waitUntil: "networkidle0" });
+    await until(has(p, /Overview/));
+    await sleep(500);
+    const sizes = await p.evaluate(() => {
+      const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      let total = 0, legible = 0, smallest = 99, smallestText = "";
+      for (let n; (n = w.nextNode()); ) {
+        const t = n.textContent.trim();
+        const el = n.parentElement;
+        if (!t || !el || el.closest("script,style")) continue;
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height || getComputedStyle(el).visibility === "hidden") continue;
+        const px = parseFloat(getComputedStyle(el).fontSize);
+        total += t.length;
+        if (px >= 12) legible += t.length;
+        if (px < smallest) [smallest, smallestText] = [px, t.slice(0, 24)];
+      }
+      return { share: legible / total, smallest, smallestText };
+    });
+    ok(`text is legible on ${name}: nothing under 12px`, sizes.smallest >= 12 && sizes.share === 1, `smallest ${sizes.smallest}px ("${sizes.smallestText}"), ${(sizes.share * 100).toFixed(1)}% at 12px or more`);
+    await p.close();
+  }
+
   // The menu drawer on a phone behaves like a dialog.
   {
     const p = await open();

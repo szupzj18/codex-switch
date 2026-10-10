@@ -62,7 +62,7 @@ export function Bar({ w }: { w: UsageWindow }) {
   return (
     <div className="min-w-0">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="rounded bg-line px-1.5 py-px font-mono text-[11px] font-medium tracking-wide text-dim">{windowLabel(w.window_seconds)}</span>
+        <span className="rounded bg-line px-1.5 py-px font-mono text-xs font-medium tracking-wide text-dim">{windowLabel(w.window_seconds)}</span>
         <span className={`text-sm font-semibold tabular-nums ${p >= 50 ? textColor(p) : ""}`}>{p}%</span>
       </div>
       <div

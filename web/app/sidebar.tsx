@@ -100,7 +100,7 @@ export function Sidebar({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/icon.svg`} width={30} height={30} alt="" className="rounded-lg" />
             <span className="text-[15px] font-semibold tracking-tight">zorua</span>
-            {data && <span className="rounded-full bg-line px-2 py-0.5 font-mono text-[11px] text-dim">{data.version}</span>}
+            {data && <span className="rounded-full bg-line px-2 py-0.5 font-mono text-xs text-dim">{data.version}</span>}
           </button>
           <button ref={closeBtn} type="button" onClick={onClose} aria-label="Close menu" className="rounded-lg p-1.5 text-dim hover:text-fg lg:hidden">
             <Icon name="close" />
@@ -115,7 +115,7 @@ export function Sidebar({
           >
             <Icon name="search" className="size-3.5" />
             <span className="flex-1">Jump to…</span>
-            <kbd className="rounded border border-line-strong px-1.5 py-px text-[11px]">⌘K</kbd>
+            <kbd className="rounded border border-line-strong px-1.5 py-px text-xs">⌘K</kbd>
           </button>
         </div>
 
@@ -139,7 +139,7 @@ export function Sidebar({
                   tone={tones.get(`p:${p.name}`)}
                   active={at({ kind: "provider", name: p.name })}
                   onClick={() => onGo({ kind: "provider", name: p.name })}
-                  right={<span className="text-[11px] text-dim">{p.agent}</span>}
+                  right={<span className="text-xs text-dim">{p.agent}</span>}
                 >
                   {p.name}
                 </Item>

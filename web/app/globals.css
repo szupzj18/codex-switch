@@ -17,6 +17,8 @@
   --color-danger: #fb7185;
   --color-on-accent: #04110e;
   --color-on-danger: #1a0508;
+  /* The root size is 14px, which would make text-xs 10.5px (0.75rem). The smallest step stays 12px. */
+  --text-xs: 12px;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset;
