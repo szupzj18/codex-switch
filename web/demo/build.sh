@@ -12,6 +12,12 @@ OUT="${1:-$WEB/../docs/demo}"
 BASE="${ZORUA_DEMO_BASE:-/zorua/demo}"
 TMP="$WEB/.demo-build"
 
+# The output directory is replaced, so refuse one that holds something else (`sh build.sh .` or `~`).
+if [ -d "$OUT" ] && [ -n "$(ls -A "$OUT" 2>/dev/null)" ] && [ ! -f "$OUT/.zorua-demo" ] && ! { [ -d "$OUT/_next" ] && [ -f "$OUT/index.html" ]; }; then
+  echo "refusing to replace $OUT: it is not empty and does not look like an earlier demo build" >&2
+  exit 1
+fi
+
 rm -rf "$TMP"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/lib"
@@ -27,4 +33,5 @@ cp -R "$HERE/overlay/." "$TMP/"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 cp -R "$TMP/out/." "$OUT/"
+touch "$OUT/.zorua-demo"   # marks the directory as ours, so the next build may replace it
 echo "demo written to $OUT (base path $BASE)"

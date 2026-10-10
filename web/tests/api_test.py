@@ -29,6 +29,14 @@ def check(label, cond, extra=""):
     print(("PASS " if cond else "FAIL ") + label, extra if not cond else ""); 
     if not cond: sys.exit(1)
 
+# --- response headers: the page cannot be framed by another site
+def headers_of(path):
+    with urllib.request.urlopen(B + path, timeout=60) as f: return f.headers
+for path in ("/", "/api/state"):
+    h = headers_of(path)
+    check(path + " cannot be framed", "frame-ancestors 'none'" in (h.get("Content-Security-Policy") or "") and h.get("X-Frame-Options") == "DENY", dict(h))
+    check(path + " sends nosniff and no referrer", h.get("X-Content-Type-Options") == "nosniff" and h.get("Referrer-Policy") == "no-referrer")
+
 # --- guards
 check("no Origin -> 403", post({"action":"x"}, headers={"Content-Type":"application/json","X-Zorua-Web":"1"})[0] == 403)
 check("foreign Origin -> 403", post({"action":"x"}, headers={**H,"Origin":"http://evil.example"})[0] == 403)

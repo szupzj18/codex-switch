@@ -2,6 +2,7 @@
 // with Chrome. Needs `npm run build` first and a Chrome (CHROME_PATH, or a common install location).
 // Never touches your real accounts. Run: npm run test:ui
 import { spawn } from "node:child_process";
+import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -271,6 +272,25 @@ try {
     await sleep(300);
     ok("Esc closes the menu and returns focus to its button", (await where()) === "Open menu" && (await p.evaluate(() => document.getElementById("main").inert === false)), await where());
     await p.close();
+  }
+
+  // Another site cannot frame the dashboard.
+  // A page on another origin (a second local server) embeds the dashboard and, as a control, one of its own pages.
+  {
+    const other = http.createServer((req, res) => {
+      res.setHeader("content-type", "text/html");
+      res.end(req.url === "/ok" ? "<p>ok</p>" : `<iframe id="a" src="${BASE}/"></iframe><iframe id="b" src="/ok"></iframe>`);
+    });
+    await new Promise((r) => other.listen(0, "127.0.0.1", r));
+    const origin = `http://localhost:${other.address().port}`; // another hostname, so another origin
+    const p = await open();
+    await p.goto(origin + "/", { waitUntil: "networkidle0" });
+    await sleep(1200);
+    const urls = p.frames().filter((f) => f !== p.mainFrame()).map((f) => f.url());
+    const dashboard = urls.find((u) => u.startsWith("chrome-error:") || u.startsWith(BASE));
+    ok("another site cannot frame the dashboard", urls.some((u) => u === origin + "/ok") && dashboard?.startsWith("chrome-error:"), urls.join(" | "));
+    await p.close();
+    other.close();
   }
 
   // Server side.
