@@ -123,7 +123,7 @@ export function Palette({ commands, initial = "", onClose }: { commands: Command
           spellCheck={false}
           autoComplete="off"
         />
-        <kbd className="rounded border border-line-strong px-1.5 py-px text-[11px] text-dim">esc</kbd>
+        <kbd className="rounded border border-line-strong px-1.5 py-px text-xs text-dim">esc</kbd>
       </div>
       <div ref={list} id={`${uid}-list`} role="listbox" className="max-h-[min(24rem,52vh)] overflow-y-auto p-2">
         {shown.length === 0 && <p className="px-3 py-8 text-center text-xs text-dim">Nothing matches “{q}”.</p>}
@@ -145,7 +145,7 @@ export function Palette({ commands, initial = "", onClose }: { commands: Command
                 {c.icon && <Icon name={c.icon} className={i === current ? "" : "text-dim"} />}
                 <span className="min-w-0 flex-1 truncate">{c.label}</span>
                 {c.hint && <span className="truncate text-xs text-dim">{c.hint}</span>}
-                {c.shortcut && <kbd className="rounded border border-line-strong px-1.5 py-px font-mono text-[11px] text-dim">{c.shortcut}</kbd>}
+                {c.shortcut && <kbd className="rounded border border-line-strong px-1.5 py-px font-mono text-xs text-dim">{c.shortcut}</kbd>}
                 {i === current && <Icon name="enter" className="size-3.5" />}
               </div>
             </div>
