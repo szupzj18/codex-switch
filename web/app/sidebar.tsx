@@ -81,7 +81,7 @@ export function Sidebar({
       {open && <div className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm lg:hidden" onClick={onClose} aria-hidden />}
       <nav
         aria-label="Zorua"
-        className={`${open ? "fixed inset-y-0 left-0 z-40 w-72 animate-slide-in overflow-y-auto border-r border-line-strong" : "hidden"} bg-panel pb-3 pt-4 lg:sticky lg:top-4 lg:z-auto lg:block lg:max-h-[calc(100vh-2rem)] lg:w-auto lg:animate-none lg:self-start lg:overflow-y-auto lg:rounded-2xl lg:border lg:border-line lg:shadow-card`}
+        className={`${open ? "fixed inset-y-0 left-0 z-40 w-72 animate-slide-in overflow-y-auto border-r border-line-strong" : "hidden"} bg-panel pb-3 pt-4 lg:sticky lg:top-4 lg:z-auto lg:block lg:max-h-[calc(100vh-2rem)] lg:w-auto lg:animate-none lg:self-start lg:overflow-y-auto lg:squircle lg:rounded-2xl lg:border lg:border-line lg:shadow-card`}
       >
         <div className="flex items-center justify-between px-4">
           <button type="button" onClick={() => onGo({ kind: "overview" })} className="flex items-center gap-2.5 text-left">

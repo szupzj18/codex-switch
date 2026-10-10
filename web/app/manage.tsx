@@ -33,7 +33,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
       onClose={onClose}
       onClick={(e) => e.target === ref.current && ref.current?.close()}
       tabIndex={-1}
-      className="m-auto max-h-[90vh] w-[min(92vw,30rem)] outline-none rounded-2xl border border-line-strong bg-panel p-0 text-fg shadow-pop backdrop:bg-black/60 backdrop:backdrop-blur-sm open:animate-pop"
+      className="squircle m-auto max-h-[90vh] w-[min(92vw,30rem)] outline-none rounded-2xl border border-line-strong bg-panel p-0 text-fg shadow-pop backdrop:bg-black/60 backdrop:backdrop-blur-sm open:animate-pop"
     >
       <div className="p-5">
         <div className="mb-4 flex items-center justify-between gap-3">

@@ -116,6 +116,12 @@
   }
 }
 
+/* Big surfaces use continuous (superellipse) corners. A browser without corner-shape ignores the line
+   and keeps the plain border-radius. */
+.squircle {
+  corner-shape: squircle;
+}
+
 @layer base {
   html,
   body {

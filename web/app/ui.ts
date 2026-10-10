@@ -14,7 +14,7 @@ export const outlineBtn = "rounded-lg border border-accent/60 px-3 py-1.5 text-x
 export const fieldCls = "w-full rounded-lg border border-line-strong bg-bg px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-dim/60 focus:border-accent";
 
 /** A bordered surface, and the heading + count badge that sits above one. */
-export const card = "overflow-hidden rounded-2xl border border-line bg-panel shadow-card";
+export const card = "squircle overflow-hidden rounded-2xl border border-line bg-panel shadow-card";
 export const sectionTitle = "mb-3 flex items-center gap-2 text-[13px] font-semibold tracking-tight";
 export const countBadge = "rounded-full bg-line px-2 py-0.5 text-[11px] font-medium tabular-nums text-dim";
 
