@@ -70,6 +70,7 @@ export default function Dashboard() {
   const [toast, setToast] = useState<{ text: string; undo?: () => Promise<void> } | null>(null);
   const [toastHeld, setToastHeld] = useState(false);
   const [loginFor, setLoginFor] = useState<string | null>(null);
+  const [loginRun, setLoginRun] = useState(0); // a new sign-in for the same account must restart the banner
   const [view, setView] = useState<View>({ kind: "overview" });
   const [palette, setPalette] = useState<{ initial: string } | null>(null);
   const [navOpen, setNavOpen] = useState(false);
@@ -79,21 +80,28 @@ export default function Dashboard() {
   const setNotice = useCallback((text: string | null) => setToast(text ? { text } : null), []);
   const dirty = useRef(false);
   const lastG = useRef(0);
+  const loadSeq = useRef(0);
   const applied = useRef(HOME);
 
   const load = useCallback(async (force: boolean) => {
+    // Requests can finish out of order (a slow poll against a fast forced refresh); only the newest one counts.
+    const id = ++loadSeq.current;
     setLoading(true);
     try {
       const r = await fetch(`/api/state${force ? "?refresh=1" : ""}`, { cache: "no-store" });
       const body = await r.json();
+      if (id !== loadSeq.current) return;
       if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
-      setRes(body as StateResponse);
-      setChecks((cur) => newest(cur, (body as StateResponse).checks ?? {}));
+      const next = body as StateResponse;
+      setRes(next);
+      // A removed provider's last check must not outlive it (a new provider may reuse the name).
+      const names = new Set(next.data.providers.map((p) => p.name));
+      setChecks((cur) => newest(Object.fromEntries(Object.entries(cur).filter(([k]) => names.has(k))), next.checks ?? {}));
       setErr(null);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      if (id === loadSeq.current) setErr(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (id === loadSeq.current) setLoading(false);
     }
   }, []);
 
@@ -133,15 +141,27 @@ export default function Dashboard() {
   const finished = (message: string, job?: { name: string }) => {
     setDialog(null);
     setNotice(message);
-    if (job) setLoginFor(job.name);
+    if (job) {
+      setLoginFor(job.name);
+      setLoginRun((n) => n + 1);
+    }
     load(true);
   };
   const onLoginFinished = useCallback(() => load(true), [load]);
 
   useEffect(() => {
     load(false);
-    const t = setInterval(() => load(false), POLL_MS);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      if (!document.hidden) load(false);
+    }, POLL_MS);
+    const onVisible = () => {
+      if (!document.hidden) load(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   // ⌘K / Ctrl+K toggles the palette. "/" and the single-key shortcuts (SHORTCUTS) work only when no field
@@ -175,6 +195,10 @@ export default function Dashboard() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [load, go]);
+
+  useEffect(() => {
+    if (!toast) setToastHeld(false);
+  }, [toast]);
 
   // A toast goes away on its own, but not while the pointer or keyboard focus is on it.
   useEffect(() => {
@@ -315,7 +339,7 @@ export default function Dashboard() {
             </button>
           </p>
         )}
-        {loginFor && <LoginBanner name={loginFor} onFinished={onLoginFinished} />}
+        {loginFor && <LoginBanner key={`${loginFor}:${loginRun}`} name={loginFor} onFinished={onLoginFinished} />}
 
         <div className="mt-6">
           {!res && !err && <OverviewSkeleton />}
@@ -434,6 +458,7 @@ export default function Dashboard() {
             body={{ action: "provider.remove", name: dialog.name }}
             onDone={(m) => {
               dirty.current = false;
+              dropCheck(dialog.name);
               finished(m);
               if (view.kind === "provider" && view.name === dialog.name) go({ kind: "overview" });
             }}

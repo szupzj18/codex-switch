@@ -105,6 +105,13 @@ jobs:
       - name: API tests
         run: npm test
 
+      # Starts the built server against a fake core and drives it with the runner's Chrome.
+      - name: UI tests
+        run: npm run test:ui
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          CI: "true"
+
   install-e2e:
     name: install E2E (fresh user, ubuntu:24.04)
     runs-on: ubuntu-latest

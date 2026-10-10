@@ -163,6 +163,7 @@ export function ProviderPage({
   const [tick, setTick] = useState(0); // bumped when an edit should be saved
   const inflight = useRef(false);
   const queued = useRef(false);
+  const sending = useRef<ProviderDoc | null>(null); // the document of the save that is in flight
 
   const apply = useCallback((d: ProviderDoc) => {
     setCat(rows(d.models));
@@ -260,10 +261,15 @@ export function ProviderPage({
   const reference = revealed ? open : base;
   const dirty = built.doc !== null && reference !== null && canon(built.doc) !== canon(reference);
 
+  // An edit whose save is already on its way is not "unsaved": leaving the page right after a field loses
+  // its focus (which starts the save) must not ask "Discard unsaved changes?". A newer edit, or a failed
+  // save, still counts.
+  const inTransit = status.kind === "saving" && sending.current !== null && built.doc !== null && canon(built.doc) === canon(sending.current);
+  const unsaved = dirty && !inTransit;
   useEffect(() => {
-    onDirty(dirty);
+    onDirty(unsaved);
     return () => onDirty(false);
-  }, [dirty, onDirty]);
+  }, [unsaved, onDirty]);
 
   const save = useCallback(async () => {
     if (!built.doc || !dirty) return;
@@ -273,6 +279,10 @@ export function ProviderPage({
     }
     inflight.current = true;
     const sent = built.doc;
+    sending.current = sent;
+    // Tell the page now, not after the next render: a click on a link starts this save (the field loses focus)
+    // and navigates in the same moment. If the save fails the effect below flags the edit as unsaved again.
+    onDirty(false);
     setStatus({ kind: "saving" });
     setError(null);
     try {
@@ -295,12 +305,13 @@ export function ProviderPage({
       setStatus({ kind: "failed", message });
     } finally {
       inflight.current = false;
+      sending.current = null;
       if (queued.current) {
         queued.current = false;
         setTick((t) => t + 1);
       }
     }
-  }, [built.doc, dirty, name, onSaved]);
+  }, [built.doc, dirty, name, onSaved, onDirty]);
 
   useEffect(() => {
     if (tick > 0) save();

@@ -10,9 +10,9 @@ const MIN_FORCE_GAP_MS = 5_000;
 type Cache = { at: number; data: ZoruaState };
 // Kept on globalThis so route modules share one cache.
 const g = globalThis as unknown as {
-  __zoruaCache?: { cache: Cache | null; inflight: Promise<ZoruaState> | null; lastError: string | null };
+  __zoruaCache?: { cache: Cache | null; inflight: Promise<ZoruaState> | null; lastError: string | null; gen: number };
 };
-const store = (g.__zoruaCache ??= { cache: null, inflight: null, lastError: null });
+const store = (g.__zoruaCache ??= { cache: null, inflight: null, lastError: null, gen: 0 });
 
 export class ZoruaError extends Error {}
 
@@ -39,7 +39,12 @@ export function runCore(
         resolve(stdout);
       },
     );
-    if (opts.input !== undefined) child.stdin?.end(opts.input);
+    if (opts.input !== undefined) {
+      // If the core exits before it reads its input the write fails with EPIPE; without a listener that is an
+      // uncaught exception and takes the whole server down. The callback above reports the real failure.
+      child.stdin?.on("error", () => {});
+      child.stdin?.end(opts.input);
+    }
   });
 }
 
@@ -54,10 +59,14 @@ async function readState(): Promise<ZoruaState> {
 
 function refresh(): Promise<ZoruaState> {
   if (!store.inflight) {
-    store.inflight = readState()
+    const gen = store.gen;
+    const read: Promise<ZoruaState> = readState()
       .then((data) => {
-        store.cache = { at: Date.now(), data };
-        store.lastError = null;
+        // A change made while this read was running makes it stale: whoever waited for it gets it, but it is not cached.
+        if (gen === store.gen) {
+          store.cache = { at: Date.now(), data };
+          store.lastError = null;
+        }
         return data;
       })
       .catch((e: Error) => {
@@ -65,15 +74,18 @@ function refresh(): Promise<ZoruaState> {
         throw e;
       })
       .finally(() => {
-        store.inflight = null;
+        if (store.inflight === read) store.inflight = null;
       });
+    store.inflight = read;
   }
   return store.inflight;
 }
 
-/** Drop the snapshot after a change so the next read is fresh. */
+/** Drop the snapshot, and any read still running, after a change so the next read is fresh. */
 export function invalidate() {
   store.cache = null;
+  store.inflight = null;
+  store.gen += 1;
 }
 
 /** Stale-while-revalidate: an old snapshot is served at once and refreshed in the background. */

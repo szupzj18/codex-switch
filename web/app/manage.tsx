@@ -227,10 +227,17 @@ export function LoginBanner({ name, onFinished }: { name: string; onFinished: ()
   const [job, setJob] = useState<LoginJob | null>(null);
   useEffect(() => {
     let stop = false;
+    let misses = 0;
     const tick = async () => {
       const r = await fetch(`/api/login?name=${encodeURIComponent(name)}`, { cache: "no-store" }).catch(() => null);
       const j = (await r?.json().catch(() => null))?.job as LoginJob | null | undefined;
-      if (stop || !j) return;
+      if (stop) return;
+      if (!j) {
+        // One failed or empty poll must not end the wait for a sign-in that is still running: retry for a while.
+        if (++misses < 20) timer = setTimeout(tick, 2000);
+        return;
+      }
+      misses = 0;
       setJob(j);
       if (j.status === "running") timer = setTimeout(tick, 1500);
       else onFinished();
