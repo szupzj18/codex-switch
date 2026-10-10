@@ -58,6 +58,9 @@ Log: `~/Library/Logs/zorua-web.log`.
 ## Tests
 
 ```sh
+npm run typecheck    # generates Next's route types first, so it works on a fresh checkout
 npm run build
-sh tests/run.sh      # isolated HOME and fake claude/codex; never touches your real accounts
+npm test             # = sh tests/run.sh: isolated HOME and fake claude/codex; never touches your real accounts
 ```
+
+CI runs the same three on Node 20 and 22 (the `web` job), next to the shell smoke tests on Linux and macOS.

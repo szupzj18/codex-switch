@@ -15,22 +15,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install zsh
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh
 
       - name: Syntax check
         run: |
-          python3 -c "import ast,sys; [ast.parse(open(f).read()) for f in ('zorua_core.py', 'zorua_providers.py')]"
+          python3 -c "import ast,sys; [ast.parse(open(f).read()) for f in ('zorua_core.py', 'zorua_providers.py', 'zorua_statusline.py')]"
           zsh -n zorua.zsh
           sh -n install.sh
           sh -n uninstall.sh
+          sh -n web/launchd/zorua-web.sh
 
       - name: zsh smoke tests
         run: zsh tests/smoke.zsh
+
+      # macOS ships bash 3.2 and BSD userland: the setup most users of this tool actually have.
+      - name: bash smoke tests (system bash 3.2)
+        if: runner.os == 'macOS'
+        run: /bin/bash tests/smoke.bash
 
   shells:
     name: smoke (bash + fish, python ${{ matrix.python }})
@@ -59,6 +66,41 @@ jobs:
 
       - name: fish smoke tests
         run: fish tests/smoke.fish
+
+  # The dashboard in web/ is separate from the Python program: typecheck, build and run its API tests
+  # (tests/run.sh starts the built server in an isolated HOME with fake claude/codex CLIs).
+  web:
+    name: web (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22"]
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: API tests
+        run: npm test
 
   install-e2e:
     name: install E2E (fresh user, ubuntu:24.04)
