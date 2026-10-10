@@ -53,7 +53,7 @@ function Labeled({ label, hint, children }: { label: string; hint?: string; chil
     <label className="mb-3 block text-xs text-dim">
       <span className="mb-1 block">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-[11px] text-dim">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs text-dim">{hint}</span>}
     </label>
   );
 }
@@ -210,7 +210,7 @@ export function RemoveAccountForm({ name, home, canPurge, onDone, onCancel }: { 
           <span>also delete the data directory (sign-in, history). This cannot be undone.</span>
         </label>
       ) : (
-        <p className="mb-3 text-[11px] text-dim">This directory was not created by Zorua, so it can only be unregistered here.</p>
+        <p className="mb-3 text-xs text-dim">This directory was not created by Zorua, so it can only be unregistered here.</p>
       )}
       {purge && (
         <Labeled label={`type "${name}" to confirm`}>
@@ -267,7 +267,7 @@ export function LoginBanner({ name, onFinished }: { name: string; onFinished: ()
           {u}
         </a>
       ))}
-      {job.status !== "done" && job.output && <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap p-0 text-[11px] text-dim">{job.output.slice(-600)}</pre>}
+      {job.status !== "done" && job.output && <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap p-0 text-xs text-dim">{job.output.slice(-600)}</pre>}
     </div>
   );
 }

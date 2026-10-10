@@ -74,6 +74,8 @@ export default function Dashboard() {
   const [view, setView] = useState<View>({ kind: "overview" });
   const [palette, setPalette] = useState<{ initial: string } | null>(null);
   const [navOpen, setNavOpen] = useState(false);
+  const menuBtn = useRef<HTMLButtonElement>(null);
+  const navWasOpen = useRef(false);
   const [checks, setChecks] = useState<Record<string, Check>>({});
   const [checking, setChecking] = useState<Set<string>>(new Set());
   const notice = toast?.text ?? null;
@@ -129,6 +131,20 @@ export default function Dashboard() {
       window.removeEventListener("hashchange", onHash);
       window.removeEventListener("beforeunload", onUnload);
     };
+  }, []);
+  // Closing the drawer returns focus to the button that opened it; widening the window past lg turns the
+  // drawer back into the sidebar, so it must not stay "open" (and the page inert).
+  useEffect(() => {
+    if (navWasOpen.current && !navOpen) menuBtn.current?.focus();
+    navWasOpen.current = navOpen;
+  }, [navOpen]);
+  useEffect(() => {
+    const wide = matchMedia("(min-width: 1024px)");
+    const close = () => {
+      if (wide.matches) setNavOpen(false);
+    };
+    wide.addEventListener("change", close);
+    return () => wide.removeEventListener("change", close);
   }, []);
   const go = useCallback((v: View) => {
     setNavOpen(false);
@@ -298,13 +314,13 @@ export default function Dashboard() {
     <div className="mx-auto grid max-w-[1800px] gap-6 px-4 pb-16 pt-4 lg:grid-cols-[15.5rem_minmax(0,1fr)] lg:px-6">
       <Sidebar data={data} view={view} items={items} onGo={go} onSearch={() => setPalette({ initial: "" })} open={navOpen} onClose={() => setNavOpen(false)} />
 
-      <main id="main" tabIndex={-1} className="min-w-0 outline-none">
+      <main id="main" tabIndex={-1} inert={navOpen} className="min-w-0 outline-none">
         <header className="sticky top-0 z-20 -mx-4 flex flex-wrap items-center gap-x-3 gap-y-3 border-b border-line bg-bg/80 px-4 py-3 backdrop-blur-md lg:-mx-6 lg:px-6">
-          <button type="button" onClick={() => setNavOpen(true)} aria-label="Open menu" className="rounded-lg border border-line-strong p-2 text-dim hover:text-fg lg:hidden">
+          <button ref={menuBtn} type="button" onClick={() => setNavOpen(true)} aria-label="Open menu" className="rounded-lg border border-line-strong p-2 text-dim hover:text-fg lg:hidden">
             <Icon name="menu" />
           </button>
           <div className="min-w-0 flex-1">
-            <div className="truncate font-mono text-[11px] text-accent">$ zorua usage{data ? ` · ${data.version}` : ""}</div>
+            <div className="truncate font-mono text-xs text-accent">$ zorua usage{data ? ` · ${data.version}` : ""}</div>
             <h1 className="truncate text-xl font-semibold leading-tight tracking-tight">{title}</h1>
           </div>
           <div className="flex items-center gap-2">
@@ -472,7 +488,7 @@ export default function Dashboard() {
             {SHORTCUTS.map(([keys, what]) => (
               <div key={keys} className="contents">
                 <dt>
-                  <kbd className="whitespace-nowrap rounded border border-line-strong px-1.5 py-0.5 text-[11px] text-dim">{keys}</kbd>
+                  <kbd className="whitespace-nowrap rounded border border-line-strong px-1.5 py-0.5 text-xs text-dim">{keys}</kbd>
                 </dt>
                 <dd className="text-fg">{what}</dd>
               </div>

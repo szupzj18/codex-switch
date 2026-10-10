@@ -222,14 +222,16 @@ if (typeof window !== "undefined" && !(window as unknown as { __zoruaDemo?: bool
 /** A small badge so nobody mistakes this for their own accounts. */
 export function Demo() {
   return (
-    <a
-      href="https://github.com/szupzj18/zorua"
-      target="_blank"
-      rel="noreferrer"
-      className="squircle fixed bottom-3 left-3 z-40 hidden max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-xl border border-line-strong bg-panel/90 px-3 py-1.5 text-[11px] text-dim shadow-pop backdrop-blur hover:text-fg sm:flex"
-    >
-      <span className="size-1.5 rounded-full bg-accent" aria-hidden />
-      Live demo · made-up data · changes stay in this tab
-    </a>
+    <aside aria-label="About this demo" className="fixed bottom-3 left-3 z-40 hidden max-w-[calc(100vw-1.5rem)] sm:block">
+      <a
+        href="https://github.com/szupzj18/zorua"
+        target="_blank"
+        rel="noreferrer"
+        className="squircle flex items-center gap-2 rounded-xl border border-line-strong bg-panel/90 px-3 py-1.5 text-xs text-dim shadow-pop backdrop-blur hover:text-fg"
+      >
+        <span className="size-1.5 rounded-full bg-accent" aria-hidden />
+        Live demo · made-up data · changes stay in this tab
+      </a>
+    </aside>
   );
 }

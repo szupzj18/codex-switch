@@ -60,7 +60,7 @@ export function ThemeSwitch() {
   }, []);
 
   return (
-    <div role="radiogroup" aria-label="Theme" className="mx-3 mt-5 flex rounded-xl bg-line/70 p-0.5 text-[11px]">
+    <div role="radiogroup" aria-label="Theme" className="mx-3 mt-5 flex rounded-xl bg-line/70 p-0.5 text-xs">
       {MODES.map((m) => (
         <button
           key={m}

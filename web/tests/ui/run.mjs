@@ -5,8 +5,11 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
+
+const axeSource = fs.readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
 
 const WEB = fileURLToPath(new URL("../..", import.meta.url));
 const PORT = process.env.ZW_UI_PORT ?? "4949";
@@ -87,6 +90,15 @@ const palette = async (p, q) => {
   await sleep(150);
   await p.keyboard.press("Enter");
 };
+
+/** Run axe-core on the current page; returns a short description of every violation. */
+async function axeViolations(p) {
+  await p.evaluate(axeSource);
+  return p.evaluate(async () => {
+    const r = await axe.run(document, { resultTypes: ["violations"] });
+    return r.violations.map((v) => `${v.id} x${v.nodes.length} (${v.nodes[0].target.join(" ").slice(0, 80)})`);
+  });
+}
 
 try {
   // The toast: closing one with the pointer over it must not stop later ones from timing out.
@@ -212,6 +224,52 @@ try {
     await p.keyboard.press("r");
     await sleep(800);
     ok("a removed provider's failed check is forgotten when a provider of that name returns", shown && !/key rejected/.test(await text(p)), shown ? "" : "setup: the failure was never shown");
+    await p.close();
+  }
+
+  // Accessibility: axe-core over the main states, in both themes and at phone width.
+  for (const [name, scheme, size, hash, setup] of [
+    ["overview, dark", "dark", [1280, 900], "#/", null],
+    ["overview, light", "light", [1280, 900], "#/", null],
+    ["command palette", "dark", [1280, 900], "#/", (p) => p.keyboard.press("/")],
+    ["add-account dialog", "dark", [1280, 900], "#/", (p) => p.keyboard.press("a")],
+    ["shortcuts dialog", "dark", [1280, 900], "#/", (p) => p.keyboard.press("?")],
+    ["account page, light", "light", [1280, 900], "#/account/work", null],
+    ["provider page", "dark", [1280, 900], "#/provider/kimi", null],
+    ["phone, overview", "dark", [390, 844], "#/", null],
+    ["phone, menu open", "dark", [390, 844], "#/", (p) => p.click('button[aria-label="Open menu"]')],
+  ]) {
+    const p = await open();
+    await p.setViewport({ width: size[0], height: size[1] });
+    await p.emulateMediaFeatures([{ name: "prefers-color-scheme", value: scheme }]);
+    await p.goto(BASE + "/" + hash, { waitUntil: "networkidle0" });
+    await until(has(p, /Overview|Account|Provider/));
+    await sleep(500);
+    if (setup) {
+      await setup(p);
+      await sleep(500);
+    }
+    const found = await axeViolations(p);
+    ok(`no accessibility violations: ${name}`, found.length === 0, found.join("; "));
+    await p.close();
+  }
+
+  // The menu drawer on a phone behaves like a dialog.
+  {
+    const p = await open();
+    await p.setViewport({ width: 390, height: 844 });
+    await p.goto(BASE + "/#/", { waitUntil: "networkidle0" });
+    await until(has(p, /Overview/));
+    const where = () => p.evaluate(() => `${document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.tagName}`);
+    await p.click('button[aria-label="Open menu"]');
+    await sleep(400);
+    ok("opening the menu moves focus into it", (await where()) === "Close menu", await where());
+    ok("the page behind the open menu is inert", await p.evaluate(() => document.getElementById("main").inert === true));
+    for (let i = 0; i < 25; i++) await p.keyboard.press("Tab");
+    ok("Tab stays inside the open menu", await p.evaluate(() => !!document.activeElement?.closest('nav[aria-label="Zorua"]')), await where());
+    await p.keyboard.press("Escape");
+    await sleep(300);
+    ok("Esc closes the menu and returns focus to its button", (await where()) === "Open menu" && (await p.evaluate(() => document.getElementById("main").inert === false)), await where());
     await p.close();
   }
 

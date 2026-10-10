@@ -33,7 +33,7 @@ export function AccountView({ a, bindings, onLogin, onRemove, onUnbind }: { a: A
           <button type="button" onClick={onLogin} className={actionBtn}>
             sign in again
           </button>
-          <CopyButton variant="action" text="copy command" label={`copy: zorua use ${a.name}`} get={async () => `zorua use ${a.name}`} />
+          <CopyButton variant="action" text="copy command" label={`zorua use ${a.name}`} get={async () => `zorua use ${a.name}`} />
           {a.name !== "default" && (
             <button type="button" onClick={onRemove} className={dangerBtn}>
               remove
@@ -54,7 +54,7 @@ export function AccountView({ a, bindings, onLogin, onRemove, onUnbind }: { a: A
                 <span className="min-w-0 flex-1 truncate font-mono text-[13px]" title={b.dir}>
                   {b.dir}
                 </span>
-                <CopyButton variant="action" text="copy command" label={`copy: zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
+                <CopyButton variant="action" text="copy command" label={`zorua bind ${b.name} in ${b.dir}`} get={async () => `cd ${shellQuote(b.dir)} && zorua bind ${b.name}`} />
                 <button type="button" onClick={() => onUnbind(b.dir)} className={dangerBtn}>
                   unbind
                 </button>

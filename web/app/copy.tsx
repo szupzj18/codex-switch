@@ -36,15 +36,18 @@ export function CopyButton({ get, label, text = "copy", variant = "box" }: { get
     setTimeout(() => setState("idle"), 1500);
   };
   const shown = state === "copied" ? "copied" : state === "failed" ? "failed" : text;
+  // The accessible name starts with what is visible ("copy command", "copied"), so voice control and screen
+  // readers agree with the screen; the label says what is copied.
+  const name = label.toLowerCase().startsWith(shown.toLowerCase()) ? label : `${shown}: ${label}`;
   const tone = state === "copied" ? "text-accent" : state === "failed" ? "text-danger" : "text-dim hover:text-accent";
   const flash = state === "copied" ? "border-accent" : state === "failed" ? "border-danger" : "";
   return (
     <button
       type="button"
-      aria-label={label}
-      title={label}
+      aria-label={name}
+      title={name}
       onClick={click}
-      className={variant === "box" ? `w-14 rounded-lg border border-line-strong px-2 py-1 text-[11px] ${tone}` : `${actionBtn} ${tone} ${flash}`}
+      className={variant === "box" ? `w-14 rounded-lg border border-line-strong px-2 py-1 text-xs ${tone}` : `${actionBtn} ${tone} ${flash}`}
     >
       {shown}
     </button>

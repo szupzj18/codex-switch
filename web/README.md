@@ -51,7 +51,7 @@ npm test            # API tests: the built server, fake claude/codex CLIs, an is
 npm run test:ui     # browser tests: the built server on a fake core (tests/ui/fixture_core.py), driven by Chrome
 ```
 
-`test:ui` needs a Chrome (set `CHROME_PATH`, or it looks in the usual places); without one it is skipped locally and fails in CI. It starts its own server on port 4949 (`ZW_UI_PORT`).
+`test:ui` also runs axe-core over the main screens (dark, light, phone width) and needs a Chrome (set `CHROME_PATH`, or it looks in the usual places); without one it is skipped locally and fails in CI. It starts its own server on port 4949 (`ZW_UI_PORT`).
 
 ## Live demo
 
