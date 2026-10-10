@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="t">
+  <title id="t">Zorua: a fox with a ghost copy of itself</title>
+  <rect width="128" height="128" rx="28" fill="#0f1514"/>
+  <!-- the illusion: a dashed copy of the head, offset like an afterimage -->
+  <g transform="translate(10 8)" opacity=".6">
+    <path d="M14 8 L44 36 Q58 33 72 36 L102 8 L100 52 L108 70 L82 76 L58 104 L34 76 L8 70 L16 52 Z"
+          fill="none" stroke="#2dd4bf" stroke-width="3" stroke-dasharray="5 5" stroke-linejoin="round"/>
+  </g>
+  <!-- the head -->
+  <path d="M14 10 L44 38 Q58 35 72 38 L102 10 L100 54 L110 72 L82 78 L58 106 L34 78 L6 72 L16 54 Z"
+        transform="translate(4 4)" fill="#16211f" stroke="#5eead4" stroke-width="4" stroke-linejoin="round"/>
+  <!-- inner ears -->
+  <path d="M24 26 L38 40 L22 48 Z M100 26 L86 40 L102 48 Z" fill="#2dd4bf" opacity=".85"/>
+  <!-- slanted eyes -->
+  <path d="M30 62 Q42 50 56 66 Q42 68 30 62 Z M92 62 Q80 50 66 66 Q80 68 92 62 Z" fill="#5eead4"/>
+  <!-- nose -->
+  <circle cx="61" cy="104" r="4.5" fill="#5eead4"/>
+</svg>
