@@ -86,7 +86,7 @@ export function Sidebar({
         <div className="flex items-center justify-between px-4">
           <button type="button" onClick={() => onGo({ kind: "overview" })} className="flex items-center gap-2.5 text-left">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.svg" width={30} height={30} alt="" className="rounded-lg" />
+            <img src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/icon.svg`} width={30} height={30} alt="" className="rounded-lg" />
             <span className="text-[15px] font-semibold tracking-tight">zorua</span>
             {data && <span className="rounded-full bg-line px-2 py-0.5 font-mono text-[10px] text-dim">{data.version}</span>}
           </button>
