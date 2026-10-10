@@ -29,7 +29,7 @@ Full docs: https://github.com/szupzj18/zorua/blob/main/README.md
 
     curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/install.sh | sh
 
-Pin a version with `ZORUA_REF=v0.7.0` (a release tag; default is main). Each GitHub Release ships zorua-<version>.tar.gz, install.sh and SHA256SUMS.
+Pin a version with `ZORUA_REF=v0.7.1` (a release tag; default is main). Each GitHub Release ships zorua-<version>.tar.gz, install.sh and SHA256SUMS.
 
 This copies the files to ~/.zorua (override with ZORUA_HOME) and appends a marked `source` block to ~/.zshrc, ~/.bashrc and ~/.config/fish/conf.d/zorua.fish for the shells it finds. It is idempotent. A new terminal is required afterwards.
 Uninstall: `curl -fsSL https://raw.githubusercontent.com/szupzj18/zorua/main/uninstall.sh | sh -s -- --purge` (drop `--purge` to keep ~/.zorua). Account data is never deleted.

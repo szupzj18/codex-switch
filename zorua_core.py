@@ -25,7 +25,7 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))   # sibling module, also under python3 -I
 import zorua_providers as zp  # noqa: E402
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 HOME = os.path.expanduser("~")
 # CX_* are the pre-rename names of the user-facing variables; still honoured.
 CONFIG_DIR = os.environ.get("ZORUA_CONFIG_DIR") or os.environ.get("CX_CONFIG_DIR") or os.path.join(
