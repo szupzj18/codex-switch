@@ -11,13 +11,13 @@
 #
 # Environment:
 #   ZORUA_HOME  install destination (default: ~/.zorua)
-#   ZORUA_REF   version to install when downloading: a tag like v0.7.0 (default: main)
+#   ZORUA_REF   version to install when downloading: a tag like v0.7.1 (default: main)
 
 set -e
 
 REPO_OWNER="szupzj18"
 REPO_NAME="zorua"
-BRANCH="${ZORUA_REF:-main}"      # branch, tag (e.g. v0.7.0) or commit to install from
+BRANCH="${ZORUA_REF:-main}"      # branch, tag (e.g. v0.7.1) or commit to install from
 INSTALL_DIR="${ZORUA_HOME:-${CX_HOME:-$HOME/.zorua}}"
 FILES="zorua_core.py zorua_providers.py zorua_statusline.py zorua.zsh zorua.bash zorua.fish"
 MARK_BEGIN="# >>> zorua >>>"
