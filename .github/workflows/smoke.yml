@@ -56,6 +56,13 @@ jobs:
       - name: Install fish
         run: sudo apt-get update && sudo apt-get install -y fish
 
+      # Real mistakes only (undefined names, unused imports, syntax): no style rules.
+      - name: Lint Python (pyflakes rules)
+        if: matrix.python == '3.12'
+        run: |
+          python -m pip install --quiet ruff
+          ruff check --select F,E9 --no-cache zorua_core.py zorua_providers.py zorua_statusline.py web/tests/api_test.py web/tests/ui/fixture_core.py
+
       - name: Syntax check
         run: |
           bash -n zorua.bash
@@ -101,6 +108,10 @@ jobs:
 
       - name: Demo build
         run: sh demo/build.sh "$RUNNER_TEMP/zorua-demo"
+
+      # Only a warning: docs/demo is committed (GitHub Pages serves docs/) and has to be rebuilt by hand.
+      - name: Is docs/demo up to date?
+        run: sh demo/check-fresh.sh "$RUNNER_TEMP/zorua-demo"
 
       - name: API tests
         run: npm test
