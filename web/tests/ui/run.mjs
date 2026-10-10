@@ -92,6 +92,25 @@ const palette = async (p, q) => {
   await p.keyboard.press("Enter");
 };
 
+// The committed landing page and demo (docs/), served under /zorua/ the way GitHub Pages serves them.
+const DOCS = path.resolve(WEB, "../docs");
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".webp": "image/webp", ".png": "image/png", ".txt": "text/plain", ".json": "application/json" };
+const docsServer = http.createServer((req, res) => {
+  let rel = decodeURIComponent(new URL(req.url, "http://x").pathname);
+  if (!rel.startsWith("/zorua/")) rel = "/__none__";
+  let file = path.join(DOCS, rel.slice("/zorua/".length));
+  if (!file.startsWith(DOCS)) file = "";
+  if (file && fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, "index.html");
+  if (!file || !fs.existsSync(file)) {
+    res.statusCode = 404;
+    return res.end("not found");
+  }
+  res.setHeader("content-type", MIME[path.extname(file)] ?? "application/octet-stream");
+  res.end(fs.readFileSync(file));
+});
+await new Promise((r) => docsServer.listen(0, "127.0.0.1", r));
+const DOCS_BASE = `http://127.0.0.1:${docsServer.address().port}/zorua/`;
+
 /** Run axe-core on the current page; returns a short description of every violation. */
 async function axeViolations(p) {
   await p.evaluate(axeSource);
@@ -274,6 +293,48 @@ try {
     await p.close();
   }
 
+  // The landing page and the live demo it embeds.
+  {
+    const html = fs.readFileSync(path.join(DOCS, "index.html"), "utf8");
+    const png = fs.readFileSync(path.join(DOCS, "assets/og.png"));
+    ok("the landing page has a canonical address and share tags", /rel="canonical"/.test(html) && /property="og:image" content="https:\/\/[^"]+\/assets\/og\.png"/.test(html) && /name="twitter:card"/.test(html));
+    ok("the share image is a 1200x630 PNG", png.subarray(1, 4).toString() === "PNG" && png.readUInt32BE(16) === 1200 && png.readUInt32BE(20) === 630);
+    for (const [name, size, url] of [
+      ["landing page, desktop", [1280, 900], DOCS_BASE],
+      ["landing page, phone", [390, 844], DOCS_BASE],
+      ["demo, desktop", [1280, 900], DOCS_BASE + "demo/"],
+      ["demo, phone", [390, 844], DOCS_BASE + "demo/"],
+    ]) {
+      const p = await open();
+      await p.setViewport({ width: size[0], height: size[1] });
+      await p.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "dark" }]);
+      await p.goto(url, { waitUntil: "networkidle0" });
+      await sleep(800);
+      if (url.endsWith("/demo/")) await until(has(p, /Accounts/i));
+      if (url === DOCS_BASE) await p.evaluate(() => document.getElementById("stage").scrollIntoView({ block: "center" })); // loads the embed too
+      await sleep(url === DOCS_BASE ? 2500 : 300);
+      const found = await axeViolations(p);
+      ok(`no accessibility violations: ${name}`, found.length === 0, found.join("; "));
+      await p.close();
+    }
+    const p = await open();
+    let demoRequests = 0;
+    p.on("request", (r) => r.url().includes("/zorua/demo/") && demoRequests++);
+    await p.goto(DOCS_BASE, { waitUntil: "networkidle0" });
+    await sleep(500);
+    ok("the demo is not requested until it is near", demoRequests === 0 && !(await p.evaluate(() => document.getElementById("demo").getAttribute("src"))));
+    await p.evaluate(() => document.getElementById("stage").scrollIntoView({ block: "center" }));
+    const frame = await until(() => p.frames().find((f) => f.url().includes("/zorua/demo/")), 6000);
+    ok("the embedded demo loads and shows its accounts", !!frame && (await until(() => frame.evaluate(() => /Accounts/i.test(document.body.textContent) && !/reading accounts/.test(document.body.textContent)), 8000)));
+    if (frame) {
+      const box = await (await p.$("#demo")).boundingBox();
+      await p.mouse.click(box.x + box.width * 0.6, box.y + 40);
+      await p.keyboard.press("/");
+      ok("the palette opens inside the embedded demo", await until(() => frame.evaluate(() => !!document.querySelector("dialog[open][data-palette]")), 3000));
+    }
+    await p.close();
+  }
+
   // Another site cannot frame the dashboard.
   // A page on another origin (a second local server) embeds the dashboard and, as a control, one of its own pages.
   {
@@ -321,6 +382,7 @@ try {
 } finally {
   await browser.close().catch(() => {});
   server.kill();
+  docsServer.close();
   fs.rmSync(ROOT, { recursive: true, force: true });
 }
 
