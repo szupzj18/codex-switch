@@ -4,7 +4,7 @@ import { CheckBadge } from "./check";
 import { Icon, type IconName } from "./icons";
 import { actionBtn, card, countBadge, dangerBtn, rowActions, sectionTitle } from "./ui";
 import { CopyButton, shellQuote } from "./copy";
-import { ago, Bar, barColor, peak, PLAN_STYLE, textColor, usageNote } from "./usage";
+import { barColor, peak, PLAN_STYLE, textColor, UsagePanel } from "./usage";
 import type { View } from "./view";
 
 function Panel({ title, icon, count, action, children }: { title: string; icon: IconName; count?: number; action?: React.ReactNode; children: React.ReactNode }) {
@@ -106,8 +106,6 @@ const AGENT_TONE: Record<Account["agent"], string> = { codex: "bg-info/15 text-i
 const ROW = "row-pad grid grid-cols-1 gap-4 border-b border-line px-4 transition-colors last:border-b-0 hover:bg-panel-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]";
 
 function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () => void; onLogin: () => void; onRemove: () => void }) {
-  const ws = a.usage.windows;
-  const note = usageNote(a);
   return (
     <li className={ROW}>
       <div className="flex min-w-0 items-start gap-3">
@@ -129,19 +127,7 @@ function AccountRow({ a, onOpen, onLogin, onRemove }: { a: Account; onOpen: () =
           </div>
         </div>
       </div>
-      <div>
-        {ws.length > 0 ? (
-          <div className="grid grid-cols-2 gap-4">
-            {ws.map((w, i) => (
-              <Bar key={i} w={w} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-xs text-dim">{note}</div>
-        )}
-        {ws.length > 0 && a.usage.age_seconds != null && <div className="mt-2 text-[11px] text-dim">from its last session, {ago(a.usage.age_seconds)}</div>}
-        {ws.length > 0 && note && <div className="mt-2 text-[11px] text-danger">{note}</div>}
-      </div>
+      <UsagePanel a={a} />
       <div className={rowActions}>
         <button type="button" onClick={onLogin} className={actionBtn}>
           sign in

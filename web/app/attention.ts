@@ -16,7 +16,7 @@ export function attention(data: ZoruaState, checks: Record<string, Check>): Item
     else if (a.usage.error) items.push({ key: `a:${a.name}`, tone: "warn", text: `${a.name}: ${a.usage.error}`, to });
     else if (p != null && p >= 80) items.push({ key: `a:${a.name}`, tone: "danger", text: `${a.name} at ${p}% of its limit`, to });
     else if (a.usage.shadowed_by?.length) items.push({ key: `a:${a.name}`, tone: "warn", text: `${a.name}: relay hidden by ${a.usage.shadowed_by[0].file}`, to });
-    else if (a.state === "ok" && a.usage.windows.length === 0 && a.agent === "claude") items.push({ key: `a:${a.name}`, tone: "info", text: `${a.name}: no usage data yet`, to });
+    else if (a.state === "ok" && a.usage.windows.length === 0 && a.agent === "claude") items.push({ key: `a:${a.name}`, tone: "info", text: a.usage.expired?.length ? `${a.name}: usage window reset, waiting for a new session` : `${a.name}: no usage data yet`, to });
   }
   for (const p of data.providers) {
     const c = checks[p.name];

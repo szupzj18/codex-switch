@@ -204,6 +204,13 @@ out=$(zorua usage)
 contains "$out" " 42%" "5h used percent from cache"
 contains "$out" "  7%" "7d used percent from cache"
 contains "$out" "Claude usage as of" "age note"
+# a window whose reset time has passed is reported as expired, not silently dropped
+echo "{\"five_hour\":{\"used_percentage\":42,\"resets_at\":$((NOW - 7200))},\"seven_day\":{\"used_percentage\":7,\"resets_at\":$((NOW + 200000))},\"updated_at\":$((NOW - 7300))}" > "$U1/.zorua-usage.json"
+out=$(zorua usage)
+contains "$out" "5H window reset 2h0m ago" "text note for a window that has reset"
+not_contains "$out" " 42%" "an expired window must not show its old percentage"
+zorua usage --json | python3 -c 'import json,sys;d={a["name"]:a for a in json.load(sys.stdin)["accounts"]};u=d["u1"]["usage"];assert [w["used_percent"] for w in u["windows"]]==[7], u;assert len(u["expired"])==1 and u["expired"][0]["window_seconds"]==18000 and 7190<=u["expired"][0]["reset_ago_seconds"]<=7300, u;assert d["work"]["usage"]["expired"] is None' || die "usage --json must list expired windows"
+echo "$JSON" | CLAUDE_CONFIG_DIR="$U1" python3 "$ROOT/zorua_statusline.py" -- 'cat >/dev/null'
 ok "claude usage from the status-line relay cache"
 
 # hook install / status / remove on a settings.json with an existing status line

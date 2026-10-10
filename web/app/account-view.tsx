@@ -1,7 +1,7 @@
 import type { Account, Binding } from "@/lib/types";
 import { CopyButton, shellQuote } from "./copy";
 import { actionBtn, actionRow, card, dangerBtn, sectionTitle } from "./ui";
-import { ago, Bar, PLAN_STYLE, usageNote } from "./usage";
+import { PLAN_STYLE, UsagePanel } from "./usage";
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -13,8 +13,6 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 }
 
 export function AccountView({ a, bindings, onLogin, onRemove, onUnbind }: { a: Account; bindings: Binding[]; onLogin: () => void; onRemove: () => void; onUnbind: (dir: string) => void }) {
-  const ws = a.usage.windows;
-  const note = usageNote(a);
   return (
     <div className="grid gap-6 xl:grid-cols-2">
       <section>
@@ -46,17 +44,7 @@ export function AccountView({ a, bindings, onLogin, onRemove, onUnbind }: { a: A
       <section>
         <h2 className={`${sectionTitle}`}>Usage</h2>
         <div className={`${card} p-4`}>
-          {ws.length > 0 ? (
-            <div className="grid grid-cols-2 gap-6">
-              {ws.map((w, i) => (
-                <Bar key={i} w={w} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-xs text-dim">{note}</div>
-          )}
-          {ws.length > 0 && a.usage.age_seconds != null && <div className="mt-3 text-[11px] text-dim">from its last session, {ago(a.usage.age_seconds)}</div>}
-          {ws.length > 0 && note && <div className="mt-2 text-[11px] text-danger">{note}</div>}
+          <UsagePanel a={a} roomy />
         </div>
         <h2 className={`mt-6 ${sectionTitle}`}>Bound directories</h2>
         <div className={card}>

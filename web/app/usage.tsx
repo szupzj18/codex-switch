@@ -48,6 +48,7 @@ export function usageNote(a: Account): string | null {
   if (a.state !== "ok") return a.state === "apikey" ? "API key login" : a.state === "none" ? "not signed in" : a.state;
   if (a.usage.windows.length === 0) {
     if (a.agent !== "claude") return "no usage data";
+    if (a.usage.expired?.length) return null; // the panel shows what reset and when
     const hidden = a.usage.shadowed_by?.[0];
     if (hidden) return `no usage yet — ${hidden.file} has its own status line, which hides the relay in sessions started in ${hidden.dir}. Run 'zorua hook install ${a.name} --shadows'`;
     // Sessions that were already running when the relay was installed never call it.
@@ -75,6 +76,57 @@ export function Bar({ w }: { w: UsageWindow }) {
         <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(p)}`} style={{ width: `${p}%` }} />
       </div>
       {w.reset_after_seconds != null && <div className="mt-1.5 text-[11px] text-dim">resets in {span(w.reset_after_seconds)}</div>}
+    </div>
+  );
+}
+
+/** A cache older than this means no session is running to refresh it. */
+const STALE_SECONDS = 600;
+
+/** A window that reset since the last report: its old percentage is gone and the new one is unknown. */
+function Expired({ window_seconds, reset_ago_seconds }: { window_seconds: number; reset_ago_seconds: number }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline justify-between gap-2 text-xs">
+        <span className="text-dim">{windowLabel(window_seconds)}</span>
+        <span className="text-dim">–</span>
+      </div>
+      <div className="mt-1 h-1.5 rounded-full border border-dashed border-dim/40" aria-hidden />
+      <div className="mt-1 text-[11px] text-dim">reset {ago(reset_ago_seconds)}, new usage unknown</div>
+    </div>
+  );
+}
+
+/** An account's usage: bars, windows that have reset, how old the numbers are, and why there are none. */
+export function UsagePanel({ a, roomy = false }: { a: Account; roomy?: boolean }) {
+  const ws = a.usage.windows;
+  const expired = a.usage.expired ?? [];
+  const note = usageNote(a);
+  const age = a.usage.age_seconds;
+  const gap = roomy ? "gap-6" : "gap-4";
+  const top = roomy ? "mt-3" : "mt-2";
+  return (
+    <div>
+      {ws.length + expired.length > 0 ? (
+        <div className={`grid grid-cols-2 ${gap}`}>
+          {ws.map((w, i) => (
+            <Bar key={i} w={w} />
+          ))}
+          {expired.map((e, i) => (
+            <Expired key={i} {...e} />
+          ))}
+        </div>
+      ) : (
+        note && <div className="text-xs text-dim">{note}</div>
+      )}
+      {ws.length + expired.length > 0 && age != null && (
+        <div className={`${top} text-[11px] ${age >= STALE_SECONDS ? "text-warn" : "text-dim"}`}>
+          from its last session, {ago(age)}
+          {age >= STALE_SECONDS && " — no session is open to refresh it"}
+        </div>
+      )}
+      {expired.length > 0 && ws.length === 0 && (age == null || age < STALE_SECONDS) && <div className="mt-1 text-[11px] text-dim">waiting for a new claude session to report the new window</div>}
+      {ws.length + expired.length > 0 && note && <div className="mt-2 text-[11px] text-danger">{note}</div>}
     </div>
   );
 }
